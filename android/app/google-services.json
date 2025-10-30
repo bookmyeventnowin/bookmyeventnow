@@ -1,0 +1,126 @@
+{
+  "project_info": {
+    "project_number": "675236501670",
+    "project_id": "bookmyevent-2192b",
+    "storage_bucket": "bookmyevent-2192b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:675236501670:android:ea38766f57897e1a61fc67",
+        "android_client_info": {
+          "package_name": "com.example.bookmyevent_admin"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "675236501670-gtmktocs4sepbni3284ef2hab7bup3f7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSRekI0FJK8w2Ye4A5IBbmduPhJ860is4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "675236501670-gtmktocs4sepbni3284ef2hab7bup3f7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "675236501670-7do20vq4aab3faq9c8e7m02g9kpier2q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.bookmyeventUv"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:675236501670:android:a26e8076a4b9ac6d61fc67",
+        "android_client_info": {
+          "package_name": "com.example.bookmyevent_uv"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "675236501670-gtmktocs4sepbni3284ef2hab7bup3f7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSRekI0FJK8w2Ye4A5IBbmduPhJ860is4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "675236501670-gtmktocs4sepbni3284ef2hab7bup3f7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "675236501670-7do20vq4aab3faq9c8e7m02g9kpier2q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.bookmyeventUv"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:675236501670:android:cb1850f6594f137661fc67",
+        "android_client_info": {
+          "package_name": "com.yourcompany.bookmyeventnow"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "675236501670-seh9qg3ead5ulk07qs2tqi7qpp4sju3c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.yourcompany.bookmyeventnow",
+            "certificate_hash": "96affab76b158f5ad214a9df3c9748869657b71f"
+          }
+        },
+        {
+          "client_id": "675236501670-gtmktocs4sepbni3284ef2hab7bup3f7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSRekI0FJK8w2Ye4A5IBbmduPhJ860is4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "675236501670-gtmktocs4sepbni3284ef2hab7bup3f7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "675236501670-7do20vq4aab3faq9c8e7m02g9kpier2q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.bookmyeventUv"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

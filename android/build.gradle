@@ -1,0 +1,38 @@
+// Top-level build.gradle (Groovy) for Flutter projects
+// Compatible with AGP 8.1.1, Kotlin 1.9.22 and Gradle 8.4
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Android Gradle Plugin
+        classpath 'com.android.tools.build:gradle:8.1.1'
+        // Kotlin plugin (used by some plugins)
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
+        // Google services (only applied in module/app if needed)
+        classpath 'com.google.gms:google-services:4.4.3'
+    }
+}
+
+plugins {
+    // Keep this empty for Groovy top-level script; app module applies 'com.android.application'
+    // If your project later uses plugin DSL at top-level, convert accordingly.
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+subprojects {
+    // Some Flutter tooling expects the :app project is configured early
+    project.evaluationDependsOn(":app")
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.layout.buildDirectory
+}

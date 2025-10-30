@@ -1,0 +1,104 @@
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    // Flutter Gradle plugin wires Flutter into the Android build.
+    id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"
+}
+
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+android {
+    namespace "com.yourcompany.bookmyeventnow"
+    compileSdkVersion 35
+
+    defaultConfig {
+        applicationId "com.yourcompany.bookmyeventnow"
+        minSdkVersion 23
+        targetSdkVersion 35
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    // Align Java and Kotlin to the same JVM target
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    signingConfigs {
+        release {
+            if (keystoreProperties["storeFile"]) {
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            // Enables code shrinking and resource shrinking in release builds.
+            minifyEnabled false
+            shrinkResources false
+            // Use the default proguard rules + your own if needed
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // Do not use release signing for debug builds. This avoids
+            // failures like: "SigningConfig \"release\" is missing required property \"storeFile\""
+            // when no keystore is configured locally.
+            // The Android Gradle Plugin provides a default debug keystore.
+            // If you intentionally want custom debug signing, define a
+            // separate debug signingConfig and reference it here.
+            // signingConfig signingConfigs.debug
+        }
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+}
+
+// Workaround: ensure APK is also copied to the legacy Flutter output path
+// build/app/outputs/flutter-apk so older tooling or certain commands can find it.
+afterEvaluate {
+    def projectRoot = rootProject.projectDir.parentFile
+    def legacyOutDir = new File("${projectRoot}/build/app/outputs/flutter-apk")
+    def copyApk = { variantName, buildType ->
+        try {
+            def candidates = [] as List<File>
+            def dir1 = new File("${buildDir}/outputs/flutter-apk")
+            def dir2 = new File("${buildDir}/outputs/apk/${buildType}")
+            if (dir1.exists()) { candidates.addAll(dir1.listFiles()?.findAll { it.name.endsWith('.apk') } ?: []) }
+            if (dir2.exists()) { candidates.addAll(dir2.listFiles()?.findAll { it.name.endsWith('.apk') } ?: []) }
+            if (!candidates.isEmpty()) {
+                def src = candidates.sort { -it.lastModified() }[0]
+                legacyOutDir.mkdirs()
+                def dest = new File(legacyOutDir, "app-${buildType}.apk")
+                ant.copy(file: src, tofile: dest, overwrite: true)
+            }
+        } catch (Exception ignored) { }
+    }
+
+    android.applicationVariants.all { variant ->
+        def cap = variant.name.capitalize()
+        def buildType = variant.buildType.name
+        ["package${cap}", "assemble${cap}", "install${cap}"].each { t ->
+            def taskRef = tasks.findByName(t)
+            if (taskRef != null) {
+                taskRef.doLast { copyApk(variant.name, buildType) }
+            }
+        }
+    }
+}

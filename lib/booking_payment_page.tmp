@@ -1,0 +1,174 @@
+import 'package:flutter/material.dart';
+
+import 'models/booking.dart';
+import 'services/booking_repository.dart';
+
+class BookingPaymentPage extends StatefulWidget {
+  final Booking booking;
+  const BookingPaymentPage({required this.booking, super.key});
+
+  @override
+  State<BookingPaymentPage> createState() => _BookingPaymentPageState();
+}
+
+class _BookingPaymentPageState extends State<BookingPaymentPage> {
+  final BookingRepository _bookingRepository = BookingRepository();
+  String _selectedMethod = 'upi';
+  bool _processing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final booking = widget.booking;
+    final total = booking.totalAmount;
+    final price = booking.pricePerHour;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Payment'),
+        backgroundColor: Colors.white,
+        elevation: 0.2,
+        foregroundColor: Colors.black87,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Order summary', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 12),
+                    _summaryRow('Vendor', booking.vendorName),
+                    _summaryRow('Category', booking.vendorCategory),
+                    _summaryRow('Event date', _formatDate(booking.eventDate)),
+                    _summaryRow('Duration', '${booking.hoursBooked} hr${booking.hoursBooked == 1 ? '' : 's'}'),
+                    _summaryRow('Rate per hour', _formatCurrency(price)),
+                    const Divider(height: 28),
+                    _summaryRow('Amount due', _formatCurrency(total), emphasize: true),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text('Choose a payment method', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            ..._paymentMethods.map(
+              (method) => RadioListTile<String>(
+                value: method.value,
+                groupValue: _selectedMethod,
+                onChanged: _processing ? null : (value) => setState(() => _selectedMethod = value ?? _selectedMethod),
+                title: Text(method.label),
+                subtitle: Text(method.description),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _processing ? null : _handlePayment,
+                child: _processing
+                    ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Complete payment'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handlePayment() async {
+    setState(() => _processing = true);
+    try {
+      final reference = 'PAY-${DateTime.now().millisecondsSinceEpoch}';
+      await _bookingRepository.updateStatus(
+        bookingId: widget.booking.id,
+        status: BookingStatus.paid,
+        paymentReference: reference,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Payment successful via ${_methodLabel(_selectedMethod)}')),
+        );
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment failed: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  Widget _summaryRow(String label, String value, {bool emphasize = false}) {
+    final style = emphasize
+        ? const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)
+        : const TextStyle(fontSize: 14, fontWeight: FontWeight.w500);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: style,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatCurrency(double value) {
+    if (value == 0) return '₹0';
+    if (value >= 100000) {
+      return '₹${(value / 100000).toStringAsFixed(1)}L';
+    }
+    return '₹${value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 2)}';
+  }
+
+  String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
+
+  String _methodLabel(String value) {
+    return _paymentMethods.firstWhere((method) => method.value == value).label;
+  }
+
+  List<_PaymentMethod> get _paymentMethods => const [
+        _PaymentMethod(
+          value: 'upi',
+          label: 'UPI / QR',
+          description: 'Pay using Google Pay, PhonePe, Paytm or any UPI app.',
+        ),
+        _PaymentMethod(
+          value: 'card',
+          label: 'Credit / Debit Card',
+          description: 'Supports Visa, MasterCard, Maestro, Rupay cards.',
+        ),
+        _PaymentMethod(
+          value: 'netbanking',
+          label: 'Netbanking',
+          description: 'Pay directly from your bank account.',
+        ),
+        _PaymentMethod(
+          value: 'wallet',
+          label: 'Wallets',
+          description: 'Amazon Pay, Mobikwik, Freecharge and more.',
+        ),
+      ];
+}
+
+class _PaymentMethod {
+  final String value;
+  final String label;
+  final String description;
+  const _PaymentMethod({required this.value, required this.label, required this.description});
+}
