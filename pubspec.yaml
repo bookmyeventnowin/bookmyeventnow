@@ -68,6 +68,7 @@ flutter:
   # Application assets
   assets:
     - assets/google_logo.png
+    - assets/bmen_logo.png
     - assets/catering_slide.png
     - assets/communityhall_slide.png
     - assets/decoration_slide.png
@@ -105,3 +106,4 @@ flutter_launcher_icons:
   image_path: assets/bmen_logo.png
   adaptive_icon_background: '#FFFFFF'
   adaptive_icon_foreground: assets/bmen_logo.png
+
