@@ -263,31 +263,12 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
                 maxLines: 3,
               ),
               const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      _imageController,
-                      label: 'Image URL',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: _uploadingImage ? null : _pickAndUploadImage,
-                    icon: _uploadingImage
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.cloud_upload_outlined),
-                    label: const Text('Upload'),
-                  ),
-                ],
+              const Text(
+                'Profile image',
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
-              if (_imageController.text.isNotEmpty)
+              if (_imageController.text.isNotEmpty) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.network(
@@ -303,6 +284,34 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 8),
+              ],
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _uploadingImage ? null : _pickAndUploadImage,
+                    icon: _uploadingImage
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_upload_outlined),
+                    label: Text(
+                      _imageController.text.isEmpty ? 'Upload' : 'Replace',
+                    ),
+                  ),
+                  if (_imageController.text.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    TextButton(
+                      onPressed: _uploadingImage
+                          ? null
+                          : () => setState(() => _imageController.clear()),
+                      child: const Text('Remove'),
+                    ),
+                  ],
+                ],
+              ),
               const SizedBox(height: 12),
               Row(
                 children: [

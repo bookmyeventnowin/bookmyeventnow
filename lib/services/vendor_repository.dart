@@ -49,12 +49,12 @@ class VendorRepository {
       ..['ownerUid'] = ownerUid
       ..['updatedAt'] = FieldValue.serverTimestamp();
 
-    payload.putIfAbsent('subscriptionStatus', () => 'inactive');
-    payload.putIfAbsent('subscriptionExpiresAt', () => null);
-    payload.putIfAbsent('subscriptionPaidAt', () => null);
-    payload.putIfAbsent('subscriptionAmountLastPaid', () => 0);
-
     if (id == null) {
+      payload.putIfAbsent('subscriptionStatus', () => 'inactive');
+      payload.putIfAbsent('subscriptionExpiresAt', () => null);
+      payload.putIfAbsent('subscriptionPaidAt', () => null);
+      payload.putIfAbsent('subscriptionAmountLastPaid', () => 0);
+
       await _collection.add(
         payload..['createdAt'] = FieldValue.serverTimestamp(),
       );
