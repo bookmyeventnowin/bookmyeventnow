@@ -41,6 +41,16 @@ android {
                 storePassword keystoreProperties["storePassword"]
                 keyAlias keystoreProperties["keyAlias"]
                 keyPassword keystoreProperties["keyPassword"]
+            } else {
+                // Fall back to the default debug keystore so release builds
+                // succeed on machines without a custom signing setup.
+                def debugKeystore = file("${System.properties['user.home']}/.android/debug.keystore")
+                if (debugKeystore.exists()) {
+                    storeFile debugKeystore
+                    storePassword "android"
+                    keyAlias "androiddebugkey"
+                    keyPassword "android"
+                }
             }
         }
     }
