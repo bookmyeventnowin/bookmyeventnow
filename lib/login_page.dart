@@ -65,46 +65,104 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Let's Go")),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            // const Text('Welcome to BookMyEventNow', style: TextStyle(fontSize: 20)),
-            const SizedBox(height: 20),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Who Are You?', style: TextStyle(fontWeight: FontWeight.w600)),
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text("Let's Go"),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    Image.asset(
+                      'assets/bmen_logo.png',
+                      height: 72,
+                    ),
+                    const SizedBox(height: 32),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Who Are You?',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: AppRole.values
+                          .map(
+                            (role) => RadioListTile<AppRole>(
+                              title: Text(
+                                role.label,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              value: role,
+                              activeColor: Colors.white,
+                              groupValue: _selectedRole,
+                              onChanged: _loading
+                                  ? null
+                                  : (value) => setState(() => _selectedRole = value),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_error != null) ...[
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    ElevatedButton.icon(
+                      icon: Image.asset('assets/google_logo.png', height: 20),
+                      label: _loading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('Sign in with Google'),
+                      onPressed: _loading ? null : _signInWithGoogle,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(220, 48),
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Other login flows can be added.'),
+                    ),
+                  ),
+                  child: const Text(
+                    'Book My Event Now',
+                    style: TextStyle(
+                      color: Color(0xFFF4F1FF),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: AppRole.values
-                  .map((role) => RadioListTile<AppRole>(
-                        title: Text(role.label),
-                        value: role,
-                        groupValue: _selectedRole,
-                        onChanged: _loading ? null : (value) => setState(() => _selectedRole = value),
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 12),
-            if (_error != null) ...[
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-              const SizedBox(height: 12),
-            ],
-            ElevatedButton.icon(
-              icon: Image.asset('assets/google_logo.png', height: 20), // optional
-              label: _loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Sign in with Google'),
-              onPressed: _loading ? null : _signInWithGoogle,
-              style: ElevatedButton.styleFrom(minimumSize: const Size(220, 48)),
-            ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Other login flows can be added.'))),
-              child: const Text('Book My Event Now'),
-            ),
-          ]),
+          ),
         ),
       ),
     );
