@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -33,9 +34,11 @@ class _UserHomePageState extends State<UserHomePage> {
   final PageController _carouselController = PageController(
     viewportFraction: 0.85,
   );
+  Timer? _carouselTimer;
+  int _carouselItemCount = 0;
 
   String _searchQuery = '';
-  int _carouselIndex = 0;
+  final ValueNotifier<int> _carouselIndexNotifier = ValueNotifier<int>(0);
   late int _currentIndex;
   late final VoidCallback _navListener;
 
@@ -55,11 +58,19 @@ class _UserHomePageState extends State<UserHomePage> {
     super.initState();
     _currentIndex = widget.initialIndex;
     userNavIndex.value = _currentIndex;
+    if (_currentIndex == 0) {
+      _startCarouselAutoPlay();
+    }
     _navListener = () {
       if (!mounted) return;
       final next = userNavIndex.value;
       if (next != _currentIndex) {
         setState(() => _currentIndex = next);
+        if (next == 0) {
+          _startCarouselAutoPlay();
+        } else {
+          _stopCarouselAutoPlay();
+        }
       }
     };
     userNavIndex.addListener(_navListener);
@@ -67,10 +78,37 @@ class _UserHomePageState extends State<UserHomePage> {
 
   @override
   void dispose() {
+    _stopCarouselAutoPlay();
     userNavIndex.removeListener(_navListener);
     _searchController.dispose();
     _carouselController.dispose();
+    _carouselIndexNotifier.dispose();
     super.dispose();
+  }
+
+  void _startCarouselAutoPlay() {
+    _carouselTimer?.cancel();
+    if (_carouselItemCount <= 1 || _currentIndex != 0) {
+      _carouselTimer = null;
+      return;
+    }
+    _carouselTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted || !_carouselController.hasClients) return;
+      if (_carouselItemCount <= 1) return;
+      final currentPage = _carouselController.page ??
+          _carouselIndexNotifier.value.toDouble();
+      final nextPage = (currentPage.round() + 1) % _carouselItemCount;
+      _carouselController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  void _stopCarouselAutoPlay() {
+    _carouselTimer?.cancel();
+    _carouselTimer = null;
   }
 
   void _openCategory(Category category) {
@@ -169,10 +207,10 @@ class _UserHomePageState extends State<UserHomePage> {
                       .toList();
 
             if (filteredCategories.isNotEmpty &&
-                _carouselIndex >= filteredCategories.length) {
+                _carouselIndexNotifier.value >= filteredCategories.length) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (!mounted) return;
-                setState(() => _carouselIndex = 0);
+                _carouselIndexNotifier.value = 0;
                 if (_carouselController.hasClients) {
                   _carouselController.jumpToPage(0);
                 }
@@ -216,9 +254,9 @@ class _UserHomePageState extends State<UserHomePage> {
           children: [
             _buildSearchHeader(),
             const SizedBox(height: 24),
-            _buildCategoryCarousel(categories, isLoading),
-            const SizedBox(height: 20),
             _buildCategoryGrid(categories, isLoading),
+            const SizedBox(height: 20),
+            _buildCategoryCarousel(categories, isLoading),
             const SizedBox(height: 32),
             _buildUserFooter(),
           ],
@@ -254,14 +292,16 @@ class _UserHomePageState extends State<UserHomePage> {
       color: _milkWhite,
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              color: _milkWhite,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Card(
+                color: _milkWhite,
+            elevation: 6,
+            shadowColor: Colors.black.withValues(alpha: 0.08),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -337,7 +377,7 @@ class _UserHomePageState extends State<UserHomePage> {
                       alignment: Alignment.centerRight,
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.logout),
-                        label: const Text('Sign out'),
+                        label: const Text('Log out'),
                         onPressed: _signOut,
                       ),
                     ),
@@ -346,7 +386,110 @@ class _UserHomePageState extends State<UserHomePage> {
               ),
             ),
             const SizedBox(height: 32),
+            _buildAboutBmeCard(),
+            const SizedBox(height: 24),
+            _buildHelpSupportCard(),
+            const SizedBox(height: 32),
             _buildUserFooter(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAboutBmeCard() {
+    const aboutBody =
+        'BME Now is India’s first all-in-one event services booking app, launched in 2025 to revolutionize how people plan and organize events.\n\n'
+        'With BME Now, you can book a wide range of event-related services hassle-free—no more long waits, no middlemen, and no unnecessary dependencies.';
+    final highlights = [
+      'One-stop booking for weddings, birthdays, corporate events, parties, and more.',
+      'Browse and compare top-rated vendors with images and verified reviews.',
+      'Smooth, secure Razorpay payments with multiple options.',
+      'User-friendly interface with clean navigation.',
+      'Transparent pricing, trusted vendors, and instant confirmations.',
+    ];
+
+    return Card(
+      color: _milkWhite,
+      elevation: 6,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'About BME Now',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              aboutBody,
+              style: TextStyle(height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Key reasons to choose BME Now:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            ...highlights.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('•  ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: Text(
+                        item,
+                        style: const TextStyle(color: Colors.black87, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Whether you are planning a grand wedding or a cozy celebration, BME Now helps you discover and book the right services quickly and confidently — all in one app.',
+              style: TextStyle(height: 1.4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHelpSupportCard() {
+    return Card(
+      color: _milkWhite,
+      elevation: 6,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              'Help & Support',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Reach out to our team for assistance or feedback:',
+              style: TextStyle(color: Colors.black87),
+            ),
+            SizedBox(height: 8),
+            SelectableText(
+              'Email: bookmyeventnow.in@gmail.com',
+              style: TextStyle(
+                color: Colors.indigo,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
@@ -356,6 +499,8 @@ class _UserHomePageState extends State<UserHomePage> {
   Widget _buildSearchHeader() {
     return Card(
       color: _milkWhite,
+      elevation: 6,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -407,8 +552,26 @@ class _UserHomePageState extends State<UserHomePage> {
   }
 
   Widget _buildCategoryCarousel(List<Category> categories, bool isLoading) {
+    if (!isLoading) {
+      final nextCount = categories.length;
+      final countChanged = _carouselItemCount != nextCount;
+      _carouselItemCount = nextCount;
+      if (_carouselItemCount <= 1) {
+        _stopCarouselAutoPlay();
+      } else if (countChanged || _carouselTimer == null) {
+        _startCarouselAutoPlay();
+      }
+    } else {
+      _carouselItemCount = categories.length;
+      if (_carouselItemCount <= 1) {
+        _stopCarouselAutoPlay();
+      }
+    }
+
     return Card(
       color: _milkWhite,
+      elevation: 6,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
@@ -417,108 +580,128 @@ class _UserHomePageState extends State<UserHomePage> {
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
               : categories.isEmpty
-              ? const Center(child: Text('No categories available yet.'))
-              : Column(
-                  children: [
-                    Expanded(
-                      child: PageView.builder(
-                        controller: _carouselController,
-                        onPageChanged: (index) =>
-                            setState(() => _carouselIndex = index),
-                        itemCount: categories.length,
-                        itemBuilder: (context, index) {
-                          final category = categories[index];
-                          final slideAsset = _assetForCategory(category);
+                  ? const Center(child: Text('No categories available yet.'))
+                  : Column(
+                      children: [
+                        Expanded(
+                          child: Listener(
+                            onPointerDown: (_) => _stopCarouselAutoPlay(),
+                            onPointerUp: (_) => _startCarouselAutoPlay(),
+                            onPointerCancel: (_) => _startCarouselAutoPlay(),
+                            child: PageView.builder(
+                              controller: _carouselController,
+                              onPageChanged: (index) =>
+                                  _carouselIndexNotifier.value = index,
+                              itemCount: categories.length,
+                              itemBuilder: (context, index) {
+                                final category = categories[index];
+                                final slideAsset =
+                                    _assetForCategory(category);
 
-                          Widget buildBackground() {
-                            if (_isValidUrl(category.imageUrl)) {
-                              return Image.network(
-                                category.imageUrl,
-                                fit: BoxFit.cover,
-                              );
-                            }
-                            if (slideAsset != null) {
-                              return Image.asset(slideAsset, fit: BoxFit.cover);
-                            }
-                            return Container(color: Colors.grey.shade900);
-                          }
+                                Widget buildBackground() {
+                                  if (_isValidUrl(category.imageUrl)) {
+                                    return Image.network(
+                                      category.imageUrl,
+                                      fit: BoxFit.cover,
+                                    );
+                                  }
+                                  if (slideAsset != null) {
+                                    return Image.asset(
+                                      slideAsset,
+                                      fit: BoxFit.cover,
+                                    );
+                                  }
+                                  return Container(color: Colors.grey.shade900);
+                                }
 
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: GestureDetector(
-                              onTap: () => _openCategory(category),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(18),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Positioned.fill(child: buildBackground()),
-                                    Container(
-                                      decoration: const BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.bottomCenter,
-                                          end: Alignment.topCenter,
-                                          colors: [
-                                            Color.fromARGB(220, 0, 0, 0),
-                                            Color.fromARGB(60, 0, 0, 0),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.end,
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: GestureDetector(
+                                    onTap: () => _openCategory(category),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(18),
+                                      child: Stack(
+                                        fit: StackFit.expand,
                                         children: [
-                                          Text(
-                                            category.name,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w700,
+                                          Positioned.fill(child: buildBackground()),
+                                          Container(
+                                            decoration: const BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.bottomCenter,
+                                                end: Alignment.topCenter,
+                                                colors: [
+                                                  Color.fromARGB(220, 0, 0, 0),
+                                                  Color.fromARGB(60, 0, 0, 0),
+                                                ],
+                                              ),
                                             ),
                                           ),
-                                          const SizedBox(height: 4),
-                                          const Text(
-                                            'Tap to explore vendors',
-                                            style: TextStyle(
-                                              color: Colors.white70,
+                                          Padding(
+                                            padding: const EdgeInsets.all(16),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  category.name,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                const Text(
+                                                  'Tap to explore vendors',
+                                                  style: TextStyle(
+                                                    color: Colors.white70,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        categories.length,
-                        (index) => Container(
-                          width: _carouselIndex == index ? 18 : 8,
-                          height: 6,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: BoxDecoration(
-                            color: _carouselIndex == index
-                                ? Colors.indigo
-                                : Colors.indigo.shade100,
-                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        ValueListenableBuilder<int>(
+                          valueListenable: _carouselIndexNotifier,
+                          builder: (context, currentIndex, _) {
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(
+                                categories.length,
+                                (index) => AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves.easeInOut,
+                                  width: currentIndex == index ? 18 : 8,
+                                  height: 6,
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: currentIndex == index
+                                        ? Colors.indigo
+                                        : Colors.indigo.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
-                  ],
-                ),
         ),
       ),
     );
@@ -526,6 +709,9 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildCategoryGrid(List<Category> categories, bool isLoading) {
     return Card(
+      color: _milkWhite,
+      elevation: 6,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -618,6 +804,9 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildUserBookingsCard(List<Booking> bookings, bool isLoading) {
     return Card(
+      color: _milkWhite,
+      elevation: 6,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -1028,7 +1217,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
                           ),
                         ),
                       IconButton(
-                        tooltip: 'Sign out',
+                        tooltip: 'Log Out',
                         icon: const Icon(Icons.logout),
                         onPressed: () async {
                           await UserRoleStorage.instance.clearRole(
@@ -2090,4 +2279,5 @@ class _VendorMetric extends StatelessWidget {
     );
   }
 }
+
 

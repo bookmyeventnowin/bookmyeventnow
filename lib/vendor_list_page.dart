@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'models/booking.dart';
 import 'models/category.dart';
 import 'models/vendor.dart';
 import 'services/booking_repository.dart';
@@ -53,7 +54,12 @@ class VendorListPage extends StatelessWidget {
               final vendor = vendors[index - 1];
               return _VendorCard(
                 vendor: vendor,
-                onBook: () => _handleBook(context, vendor),
+                onBook: () => startVendorBookingFlow(
+                  context: context,
+                  vendor: vendor,
+                  bookingRepository: _bookingRepository,
+                ),
+                onViewDetails: () => _openVendorDetails(context, vendor),
               );
             },
           );
@@ -66,30 +72,46 @@ class VendorListPage extends StatelessWidget {
     );
   }
 
-  Future<void> _handleBook(BuildContext context, Vendor vendor) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please sign in to make a booking.')),
-        );
-      }
-      return;
-    }
-
-    final selection = await showModalBottomSheet<_BookingSelection>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _BookingSheet(vendor: vendor),
+  void _openVendorDetails(BuildContext context, Vendor vendor) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VendorDetailPage(
+          vendor: vendor,
+          bookingRepository: _bookingRepository,
+        ),
+      ),
     );
-    if (selection == null) return;
+  }
+}
 
-    final userName = user.displayName?.trim();
+Future<void> startVendorBookingFlow({
+  required BuildContext context,
+  required Vendor vendor,
+  required BookingRepository bookingRepository,
+}) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to make a booking.')),
+      );
+    }
+    return;
+  }
+
+  final selection = await showModalBottomSheet<_BookingSelection>(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => _BookingSheet(vendor: vendor),
+  );
+  if (selection == null) return;
+
+  final userName = user.displayName?.trim();
   final userEmail = user.email?.trim();
 
   try {
     for (final slot in selection.slots) {
-      final hasConflict = await _bookingRepository.hasVendorBookingConflict(
+      final hasConflict = await bookingRepository.hasVendorBookingConflict(
         vendorId: vendor.id,
         eventDate: slot.eventDate,
         userId: user.uid,
@@ -109,7 +131,7 @@ class VendorListPage extends StatelessWidget {
     }
 
     for (final slot in selection.slots) {
-      await _bookingRepository.createBooking(
+      await bookingRepository.createBooking(
         userId: user.uid,
         userName: userName?.isNotEmpty == true
             ? userName!
@@ -125,6 +147,7 @@ class VendorListPage extends StatelessWidget {
         eventDate: slot.eventDate,
       );
     }
+
     if (context.mounted) {
       final requestCount = selection.slots.length;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -137,12 +160,11 @@ class VendorListPage extends StatelessWidget {
         ),
       );
     }
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unable to place booking: $error')),
-        );
-      }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to place booking: $error')),
+      );
     }
   }
 }
@@ -175,77 +197,86 @@ class _VendorHeader extends StatelessWidget {
 }
 
 class _VendorCard extends StatelessWidget {
-  const _VendorCard({required this.vendor, required this.onBook});
+  const _VendorCard({
+    required this.vendor,
+    required this.onBook,
+    required this.onViewDetails,
+  });
 
   final Vendor vendor;
   final VoidCallback onBook;
+  final VoidCallback onViewDetails;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _VendorAvatar(imageUrl: vendor.imageUrl),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    vendor.name,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onViewDetails,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _VendorAvatar(imageUrl: vendor.imageUrl),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      vendor.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    vendor.type.isNotEmpty ? vendor.type : 'Vendor',
-                    style: const TextStyle(color: Colors.black54),
-                  ),
-                  const SizedBox(height: 8),
-                  _VendorFacts(vendor: vendor),
-                  if (vendor.occasions.isNotEmpty ||
-                      vendor.moreDetails.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    if (vendor.occasions.isNotEmpty)
-                      Text(
-                        'Occasions: ${vendor.occasions.join(', ')}',
-                        style: const TextStyle(color: Colors.black54),
-                      ),
-                    if (vendor.moreDetails.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        vendor.moreDetails,
-                        style: const TextStyle(color: Colors.black54),
-                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      vendor.type.isNotEmpty ? vendor.type : 'Vendor',
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 8),
+                    _VendorFacts(vendor: vendor),
+                    if (vendor.occasions.isNotEmpty ||
+                        vendor.moreDetails.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      if (vendor.occasions.isNotEmpty)
+                        Text(
+                          'Occasions: ${vendor.occasions.join(', ')}',
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                      if (vendor.moreDetails.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          vendor.moreDetails,
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                      ],
                     ],
                   ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: onBook,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
                 ),
               ),
-              icon: const Icon(Icons.event_available_outlined),
-              label: const Text('Book'),
-            ),
-          ],
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: onBook,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+                icon: const Icon(Icons.event_available_outlined),
+                label: const Text('Book'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -882,6 +913,430 @@ class _ErrorState extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class VendorDetailPage extends StatefulWidget {
+  const VendorDetailPage({
+    super.key,
+    required this.vendor,
+    required this.bookingRepository,
+  });
+
+  final Vendor vendor;
+  final BookingRepository bookingRepository;
+
+  @override
+  State<VendorDetailPage> createState() => _VendorDetailPageState();
+}
+
+class _VendorDetailPageState extends State<VendorDetailPage> {
+  late final PageController _galleryController;
+  int _currentImageIndex = 0;
+
+  Vendor get vendor => widget.vendor;
+
+  @override
+  void initState() {
+    super.initState();
+    _galleryController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _galleryController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final images = vendor.galleryImages;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F7FB),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0.2,
+        title: Text(vendor.name),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        children: [
+          _buildGallery(images),
+          const SizedBox(height: 20),
+          _buildOverviewCard(),
+          const SizedBox(height: 20),
+          _buildRatingCard(),
+          const SizedBox(height: 20),
+          _buildFactsCard(),
+          if (vendor.occasions.isNotEmpty || vendor.moreDetails.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: _buildDetailsCard(),
+            ),
+          if (images.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: _buildThumbnailStrip(images),
+            ),
+          const SizedBox(height: 80),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: ElevatedButton.icon(
+          onPressed: () => startVendorBookingFlow(
+            context: context,
+            vendor: vendor,
+            bookingRepository: widget.bookingRepository,
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
+          ),
+          icon: const Icon(Icons.event_available_outlined),
+          label: const Text('Book Now'),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGallery(List<String> images) {
+    if (images.isEmpty) {
+      return Container(
+        height: 220,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: const Center(
+          child: Text(
+            'This vendor has not added photos yet.',
+            style: TextStyle(color: Colors.black54),
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: PageView.builder(
+              controller: _galleryController,
+              itemCount: images.length,
+              onPageChanged: (index) => setState(() {
+                _currentImageIndex = index;
+              }),
+              itemBuilder: (_, index) {
+                final imageUrl = images[index];
+                return Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.grey.shade200,
+                    alignment: Alignment.center,
+                    child: const Text('Image unavailable'),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        if (images.length > 1) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              images.length,
+              (index) => AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                width: _currentImageIndex == index ? 18 : 8,
+                height: 8,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: _currentImageIndex == index
+                      ? Colors.black87
+                      : Colors.black26,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildThumbnailStrip(List<String> images) {
+    return SizedBox(
+      height: 80,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (_, index) {
+          final url = images[index];
+          final isSelected = index == _currentImageIndex;
+          return GestureDetector(
+            onTap: () => _galleryController.animateToPage(
+              index,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            ),
+            child: Container(
+              width: 120,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected ? Colors.black87 : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.grey.shade200,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.image_not_supported_outlined),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemCount: images.length,
+      ),
+    );
+  }
+
+  Widget _buildOverviewCard() {
+    return _InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            vendor.name,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            vendor.type.isNotEmpty ? vendor.type : 'Vendor',
+            style: const TextStyle(color: Colors.black54, fontSize: 16),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              if (vendor.area.isNotEmpty)
+                _InfoChip(
+                  icon: Icons.map_outlined,
+                  label: vendor.area,
+                ),
+              if (vendor.pincode.isNotEmpty)
+                _InfoChip(
+                  icon: Icons.pin_drop_outlined,
+                  label: 'Pincode ${vendor.pincode}',
+                ),
+              if (vendor.location.isNotEmpty)
+                _InfoChip(
+                  icon: Icons.location_city_outlined,
+                  label: vendor.location,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingCard() {
+    return StreamBuilder<List<Booking>>(
+      stream:
+          widget.bookingRepository.streamVendorBookings(vendor.ownerUid),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _InfoCard(
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.redAccent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Unable to load ratings: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const _InfoCard(
+            child: Center(
+              child: SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+
+        final bookings = snapshot.data ?? const <Booking>[];
+        final ratings = bookings
+            .where(
+              (booking) =>
+                  booking.vendorId == vendor.id &&
+                  booking.rating != null &&
+                  booking.rating! > 0,
+            )
+            .toList();
+
+        if (ratings.isEmpty) {
+          return const _InfoCard(
+            child: ListTile(
+              leading: Icon(Icons.star_border, color: Colors.black54),
+              title: Text('Not rated yet'),
+              subtitle: Text('Be the first to rate this vendor after booking.'),
+            ),
+          );
+        }
+
+        final total = ratings.fold<int>(0, (sum, booking) => sum + booking.rating!);
+        final average = total / ratings.length;
+
+        return _InfoCard(
+          child: ListTile(
+            leading: const Icon(Icons.star, color: Colors.amber, size: 30),
+            title: Text(
+              '${average.toStringAsFixed(1)} / 5',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+            ),
+            subtitle: Text('${ratings.length} review${ratings.length == 1 ? '' : 's'}'),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFactsCard() {
+    return _InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'At a glance',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          _VendorFacts(vendor: vendor),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailsCard() {
+    return _InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (vendor.moreDetails.isNotEmpty) ...[
+            const Text(
+              'Highlights',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              vendor.moreDetails,
+              style: const TextStyle(color: Colors.black87),
+            ),
+            if (vendor.occasions.isNotEmpty) const SizedBox(height: 16),
+          ],
+          if (vendor.occasions.isNotEmpty) ...[
+            const Text(
+              'Occasions served',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: vendor.occasions
+                  .map(
+                    (occasion) => Chip(
+                      label: Text(occasion),
+                      backgroundColor: Colors.indigo.shade50,
+                      labelStyle: const TextStyle(color: Colors.indigo),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.indigo.shade50,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: Colors.indigo),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.indigo),
+          ),
+        ],
       ),
     );
   }

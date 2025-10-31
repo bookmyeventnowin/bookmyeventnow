@@ -16,6 +16,7 @@ class Vendor {
   final List<String> occasions;
   final String moreDetails;
   final String imageUrl;
+  final List<String> galleryImages;
   final String categoryId;
   final List<String> categoryIds;
   final String categoryName;
@@ -44,6 +45,7 @@ class Vendor {
     required this.occasions,
     required this.moreDetails,
     required this.imageUrl,
+    required this.galleryImages,
     required this.categoryId,
     required this.categoryIds,
     required this.categoryName,
@@ -95,6 +97,29 @@ class Vendor {
             .map((e) => e.toString().trim())
             .where((e) => e.isNotEmpty),
       );
+    }
+
+    final galleryImages = <String>[];
+    void addGalleryItem(dynamic value) {
+      if (value == null) return;
+      final trimmed = value.toString().trim();
+      if (trimmed.isEmpty) return;
+      if (!galleryImages.contains(trimmed)) {
+        galleryImages.add(trimmed);
+      }
+    }
+
+    final rawGallery = data['galleryImages'] ?? data['gallery'];
+    if (rawGallery is Iterable) {
+      for (final item in rawGallery) {
+        addGalleryItem(item);
+      }
+    }
+    final rawImages = data['images'];
+    if (rawImages is Iterable) {
+      for (final item in rawImages) {
+        addGalleryItem(item);
+      }
     }
 
     double parsePrice() {
@@ -165,10 +190,21 @@ class Vendor {
           (data['more'] as String?)?.trim() ??
           (data['moreDetails'] as String?)?.trim() ??
           '',
-      imageUrl:
-          (data['image'] as String?)?.trim() ??
-          (data['imageUrl'] as String?)?.trim() ??
-          '',
+      imageUrl: (() {
+        final inlineImage =
+            (data['image'] as String?)?.trim() ??
+            (data['imageUrl'] as String?)?.trim() ??
+            '';
+        if (inlineImage.isNotEmpty) {
+          addGalleryItem(inlineImage);
+          return inlineImage;
+        }
+        if (galleryImages.isNotEmpty) {
+          return galleryImages.first;
+        }
+        return '';
+      })(),
+      galleryImages: List.unmodifiable(galleryImages),
       categoryId: primaryCategoryId,
       categoryIds: categoryIds.toSet().toList(),
       categoryName: primaryCategoryName,
@@ -219,6 +255,8 @@ class Vendor {
       'more': moreDetails,
       'imageUrl': imageUrl,
       'image': imageUrl,
+      'galleryImages': galleryImages,
+      'images': galleryImages,
       'location': location,
       'area': area,
       'pincode': pincode,

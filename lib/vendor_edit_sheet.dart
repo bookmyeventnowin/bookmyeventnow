@@ -38,10 +38,12 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
   late final TextEditingController _parkingController;
   late final TextEditingController _occasionsController;
   late final TextEditingController _moreController;
-  late final TextEditingController _imageController;
   late final TextEditingController _locationController;
   late final TextEditingController _areaController;
   late final TextEditingController _pincodeController;
+
+  static const int _maxGalleryImages = 6;
+  final List<String> _imageUrls = [];
 
   bool _ac = false;
   Category? _selectedCategory;
@@ -62,11 +64,18 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
         TextEditingController(text: vendor?.parkingCapacity == 0 ? '' : vendor!.parkingCapacity.toString());
     _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') ?? '');
     _moreController = TextEditingController(text: vendor?.moreDetails ?? '');
-    _imageController = TextEditingController(text: vendor?.imageUrl ?? '');
     _locationController = TextEditingController(text: vendor?.location ?? '');
     _areaController = TextEditingController(text: vendor?.area ?? '');
     _pincodeController = TextEditingController(text: vendor?.pincode ?? '');
     _ac = vendor?.ac ?? false;
+
+    if (vendor != null) {
+      if (vendor.galleryImages.isNotEmpty) {
+        _imageUrls.addAll(vendor.galleryImages);
+      } else if (vendor.imageUrl.isNotEmpty) {
+        _imageUrls.add(vendor.imageUrl);
+      }
+    }
 
     if (widget.categories.isNotEmpty) {
       _selectedCategory = _resolveInitialCategory(widget.categories, vendor);
@@ -111,51 +120,195 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     _parkingController.dispose();
     _occasionsController.dispose();
     _moreController.dispose();
-    _imageController.dispose();
     _locationController.dispose();
     _areaController.dispose();
     _pincodeController.dispose();
     super.dispose();
   }
 
-  Future<void> _pickAndUploadImage() async {
+  bool get _canAddMoreImages =>
+      !_uploadingImage && _imageUrls.length < _maxGalleryImages;
+
+  Future<void> _pickAndUploadImages() async {
+    if (!_canAddMoreImages) return;
+    final remaining = _maxGalleryImages - _imageUrls.length;
     final picker = ImagePicker();
-    final selection = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (selection == null) return;
+    final selections = await picker.pickMultiImage(imageQuality: 85);
+    if (selections.isEmpty) return;
+
+    final allowedSelections = selections.take(remaining).toList();
+    final validSelections = <XFile>[];
+    for (final selection in allowedSelections) {
+      if (_isSupportedImage(selection)) {
+        validSelections.add(selection);
+      } else {
+        _showSnack('Only JPEG and PNG images are supported.');
+      }
+    }
+    if (validSelections.isEmpty) return;
+
     setState(() => _uploadingImage = true);
     try {
-      final file = File(selection.path);
       final storage = FirebaseStorage.instance;
-      final fileName =
-          '${widget.ownerUid}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final ref = storage.ref().child('vendor_images').child(fileName);
-      await ref.putFile(file);
-      final url = await ref.getDownloadURL();
-      if (!mounted) return;
-      setState(() {
-        _imageController.text = url;      });
+      for (final selection in validSelections) {
+        final file = File(selection.path);
+        final timestamp = DateTime.now().microsecondsSinceEpoch;
+        final extension = _fileExtension(selection).toLowerCase();
+        final ref = storage
+            .ref()
+            .child('vendor_images')
+            .child('${widget.ownerUid}/$timestamp$extension');
+        await ref.putFile(file);
+        final url = await ref.getDownloadURL();
+        if (!mounted) return;
+        setState(() => _imageUrls.add(url));
+      }
     } on FirebaseException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Unable to upload image: ${error.message ?? error.code}',
-          ),
-        ),
-      );
+      _showSnack('Unable to upload image: ${error.message ?? error.code}');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to upload image: $error')),
-      );
+      _showSnack('Unable to upload image: $error');
     } finally {
       if (mounted) {
         setState(() => _uploadingImage = false);
       }
     }
+  }
+
+  Future<void> _removeImage(String url) async {
+    setState(() => _imageUrls.remove(url));
+    try {
+      final storage = FirebaseStorage.instance;
+      await storage.refFromURL(url).delete();
+    } catch (_) {
+      // ignore storage cleanup errors
+    }
+  }
+
+  bool _isSupportedImage(XFile file) {
+    final ext = _fileExtension(file).toLowerCase();
+    return ext == '.jpg' || ext == '.jpeg' || ext == '.png';
+  }
+
+  String _fileExtension(XFile file) {
+    final name = file.name;
+    final dotIndex = name.lastIndexOf('.');
+    if (dotIndex == -1) {
+      return '';
+    }
+    return name.substring(dotIndex);
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Widget _buildGallerySection() {
+    final remaining = _maxGalleryImages - _imageUrls.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Gallery images',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            Text(
+              '${_imageUrls.length}/$_maxGalleryImages added',
+              style: const TextStyle(color: Colors.black54),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_imageUrls.isEmpty)
+          Container(
+            height: 120,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            alignment: Alignment.center,
+            child: const Text(
+              'No images yet. Upload up to 6 JPEG or PNG files.',
+              style: TextStyle(color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+          )
+        else
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: _imageUrls.map(_buildGalleryThumbnail).toList(),
+          ),
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: _canAddMoreImages ? _pickAndUploadImages : null,
+          icon: _uploadingImage
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.add_photo_alternate_outlined),
+          label: Text(
+            _canAddMoreImages
+                ? 'Add images'
+                : 'Maximum of $_maxGalleryImages reached',
+          ),
+        ),
+        if (remaining > 0) ...[
+          const SizedBox(height: 6),
+          Text(
+            'You can add $remaining more image${remaining == 1 ? '' : 's'}.',
+            style: const TextStyle(color: Colors.black54, fontSize: 12),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildGalleryThumbnail(String url) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            url,
+            height: 120,
+            width: 160,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              height: 120,
+              width: 160,
+              color: Colors.grey.shade200,
+              alignment: Alignment.center,
+              child: const Text('Image unavailable'),
+            ),
+          ),
+        ),
+        Positioned(
+          top: -10,
+          right: -10,
+          child: IconButton(
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black.withValues(alpha: 0.7),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.all(4),
+            ),
+            iconSize: 18,
+            onPressed: _uploadingImage ? null : () => _removeImage(url),
+            icon: const Icon(Icons.close),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -263,55 +416,7 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
                 maxLines: 3,
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Profile image',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              if (_imageController.text.isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    _imageController.text,
-                    height: 120,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      height: 120,
-                      alignment: Alignment.center,
-                      color: Colors.grey.shade200,
-                      child: const Text('Image unavailable'),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _uploadingImage ? null : _pickAndUploadImage,
-                    icon: _uploadingImage
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.cloud_upload_outlined),
-                    label: Text(
-                      _imageController.text.isEmpty ? 'Upload' : 'Replace',
-                    ),
-                  ),
-                  if (_imageController.text.isNotEmpty) ...[
-                    const SizedBox(width: 12),
-                    TextButton(
-                      onPressed: _uploadingImage
-                          ? null
-                          : () => setState(() => _imageController.clear()),
-                      child: const Text('Remove'),
-                    ),
-                  ],
-                ],
-              ),
+              _buildGallerySection(),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -395,6 +500,7 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
       final seating = int.tryParse(_seatingController.text.trim()) ?? 0;
       final parking = int.tryParse(_parkingController.text.trim()) ?? 0;
 
+      final primaryImage = _imageUrls.isNotEmpty ? _imageUrls.first : '';
       final payload = <String, dynamic>{
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
@@ -411,8 +517,10 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
         'occasionsFor': occasions.join(', '),
         'more': _moreController.text.trim(),
         'moreDetails': _moreController.text.trim(),
-        'imageUrl': _imageController.text.trim(),
-        'image': _imageController.text.trim(),
+        'imageUrl': primaryImage,
+        'image': primaryImage,
+        'galleryImages': _imageUrls,
+        'images': _imageUrls,
         'location': _locationController.text.trim(),
         'area': _areaController.text.trim(),
         'pincode': _pincodeController.text.trim(),
