@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
@@ -729,13 +729,49 @@ class _UserHomePageState extends State<UserHomePage> {
                               child: const Text('Pay now'),
                             ),
                           ),
-                        ] else if (booking.status == BookingStatus.paid)
-                          Text(
-                            booking.paymentReference == null
-                                ? 'Payment completed.'
-                                : 'Payment reference: ${booking.paymentReference}',
-                            style: const TextStyle(color: Colors.green),
-                          ),
+                        ] else if (booking.status == BookingStatus.paid) ...[
+                          if (booking.paymentReference != null)
+                            Text(
+                              'Payment reference: ${booking.paymentReference}',
+                              style: const TextStyle(color: Colors.green),
+                            )
+                          else
+                            const Text(
+                              'Payment completed.',
+                              style: TextStyle(color: Colors.green),
+                            ),
+                          const SizedBox(height: 8),
+                          if (booking.rating == null)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _promptForRating(booking),
+                                icon: const Icon(Icons.star_outline),
+                                label: const Text('Rate experience'),
+                              ),
+                            )
+                          else ...[
+                            Row(
+                              children: [
+                                const Icon(Icons.star, color: Colors.amber),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${booking.rating}/5',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if ((booking.review ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                booking.review!,
+                                style: const TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ],
+                        ],
                       ],
                     ),
                   );
@@ -821,6 +857,87 @@ class _UserHomePageState extends State<UserHomePage> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => BookingPaymentPage(booking: booking)),
     );
+  }
+
+  Future<void> _promptForRating(Booking booking) async {
+    final commentController =
+        TextEditingController(text: booking.review ?? '');
+    int tempRating = booking.rating ?? 5;
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Rate ${booking.vendorName}'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(5, (index) {
+                      final filled = index < tempRating;
+                      return IconButton(
+                        onPressed: () => setState(() => tempRating = index + 1),
+                        icon: Icon(
+                          filled ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                        ),
+                      );
+                    }),
+                  ),
+                  TextField(
+                    controller: commentController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Comments (optional)',
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop({
+                      'rating': tempRating,
+                      'review': commentController.text.trim(),
+                    });
+                  },
+                  child: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    commentController.dispose();
+    if (result == null) return;
+
+    final selectedRating = result['rating'] as int?;
+    final review = result['review'] as String?;
+    if (selectedRating == null || selectedRating < 1) return;
+
+    try {
+      await _bookingRepository.submitRating(
+        bookingId: booking.id,
+        rating: selectedRating,
+        review: review,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thanks for sharing your feedback!')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to submit rating: $error')),
+      );
+    }
   }
 
   bool _isValidUrl(String value) {
@@ -1004,6 +1121,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
       builder: (_) => VendorEditSheet(
         vendor: vendor,
         categories: categories,
+        ownerUid: widget.user.uid,
         onSubmit: (category, data) {
           selectedCategory = category;
           payload = data;
@@ -1118,6 +1236,17 @@ class _VendorHomePageState extends State<VendorHomePage> {
               booking.status == BookingStatus.paid,
         )
         .length;
+    final ratedBookings =
+        bookings.where((booking) => booking.rating != null).toList();
+    final double? averageRating = ratedBookings.isEmpty
+        ? null
+        : ratedBookings
+                .map((booking) => booking.rating!.toDouble())
+                .reduce((value, element) => value + element) /
+            ratedBookings.length;
+    final ratingLabel = averageRating == null
+        ? 'N/A'
+        : '${averageRating.toStringAsFixed(1)}/5 (${ratedBookings.length})';
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -1204,9 +1333,10 @@ class _VendorHomePageState extends State<VendorHomePage> {
                       value: upcoming.toString(),
                     ),
                     _buildVendorStatChip(
-                      icon: Icons.star_border,
+                      icon:
+                          averageRating == null ? Icons.star_border : Icons.star,
                       label: 'Rating',
-                      value: 'N/A',
+                      value: ratingLabel,
                     ),
                   ],
                 ),
@@ -1521,6 +1651,9 @@ class _VendorHomePageState extends State<VendorHomePage> {
     final daysRemaining = expiry != null
         ? expiry.difference(DateTime.now()).inDays
         : 0;
+    final isProcessing = _processingSubscription &&
+        _pendingSubscriptionVendor?.id == vendor.id;
+    final canRenew = !isActive && !isProcessing;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -1602,20 +1735,29 @@ class _VendorHomePageState extends State<VendorHomePage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _processingSubscription
-                  ? null
-                  : () => _handleSubscriptionPayment(vendor),
-              icon: _processingSubscription
+              onPressed:
+                  canRenew ? () => _handleSubscriptionPayment(vendor) : null,
+              icon: isProcessing
                   ? const SizedBox(
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.lock_open),
+                  : Icon(
+                      isActive ? Icons.lock : Icons.lock_open,
+                    ),
               label: Text(
                 isActive
                     ? 'Renew for ${_formatCurrency(_annualSubscriptionFee)}'
                     : 'Activate for ${_formatCurrency(_annualSubscriptionFee)}',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
               ),
             ),
           ),

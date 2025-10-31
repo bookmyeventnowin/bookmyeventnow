@@ -208,29 +208,7 @@ class _VendorCard extends StatelessWidget {
                     style: const TextStyle(color: Colors.black54),
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 20,
-                    runSpacing: 6,
-                    children: [
-                      _InfoChip(
-                        label: 'Price/hr',
-                        value: _formatCurrency(vendor.price),
-                      ),
-                      if (vendor.capacity > 0)
-                        _InfoChip(
-                          label: 'Seating',
-                          value: '${vendor.capacity}',
-                        ),
-                      if (vendor.parkingCapacity > 0)
-                        _InfoChip(
-                          label: 'Parking',
-                          value: '${vendor.parkingCapacity}',
-                        ),
-                      _InfoChip(label: 'AC', value: vendor.ac ? 'Yes' : 'No'),
-                      if (vendor.location.isNotEmpty)
-                        _InfoChip(label: 'Location', value: vendor.location),
-                    ],
-                  ),
+                  _VendorFacts(vendor: vendor),
                   if (vendor.occasions.isNotEmpty ||
                       vendor.moreDetails.isNotEmpty) ...[
                     const SizedBox(height: 12),
@@ -321,25 +299,118 @@ class _VendorAvatar extends StatelessWidget {
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.label, required this.value});
+class _VendorFacts extends StatelessWidget {
+  const _VendorFacts({required this.vendor});
 
-  final String label;
-  final String value;
+  final Vendor vendor;
 
   @override
   Widget build(BuildContext context) {
-    return RichText(
-      text: TextSpan(
-        style: const TextStyle(fontSize: 13, color: Colors.black87),
+    final rows = <_FactRow>[
+      _FactRow(
+        left: _Fact(
+          label: 'Price/hr',
+          value: _formatCurrency(vendor.price),
+        ),
+        right: vendor.capacity > 0
+            ? _Fact(label: 'Seating', value: '${vendor.capacity}')
+            : null,
+      ),
+      _FactRow(
+        left: vendor.parkingCapacity > 0
+            ? _Fact(label: 'Parking', value: '${vendor.parkingCapacity}')
+            : null,
+        right: _Fact(label: 'AC', value: vendor.ac ? 'Yes' : 'No'),
+      ),
+      _FactRow(
+        left: vendor.area.isNotEmpty
+            ? _Fact(label: 'Area', value: vendor.area)
+            : null,
+        right: vendor.pincode.isNotEmpty
+            ? _Fact(label: 'Pincode', value: vendor.pincode)
+            : null,
+      ),
+      _FactRow(
+        left: vendor.location.isNotEmpty
+            ? _Fact(label: 'Location', value: vendor.location)
+            : null,
+        right: null,
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final row in rows)
+          if (row.hasContent) ...[
+            _FactRowWidget(row: row),
+            const SizedBox(height: 4),
+          ],
+      ],
+    );
+  }
+}
+
+class _Fact {
+  const _Fact({required this.label, required this.value});
+  final String label;
+  final String value;
+}
+
+class _FactRow {
+  const _FactRow({this.left, this.right});
+  final _Fact? left;
+  final _Fact? right;
+
+  bool get hasContent => left != null || right != null;
+}
+
+class _FactRowWidget extends StatelessWidget {
+  const _FactRowWidget({required this.row});
+
+  final _FactRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _FactCell(fact: row.left)),
+        if (row.left != null && row.right != null)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6),
+            child: Text('|', style: TextStyle(color: Colors.black26)),
+          ),
+        Expanded(child: _FactCell(fact: row.right)),
+      ],
+    );
+  }
+}
+
+class _FactCell extends StatelessWidget {
+  const _FactCell({required this.fact});
+
+  final _Fact? fact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (fact == null) return const SizedBox.shrink();
+    return Text.rich(
+      TextSpan(
         children: [
           TextSpan(
-            text: '$label: ',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            text: '${fact!.label}: ',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
           ),
-          TextSpan(text: value),
+          TextSpan(text: fact!.value),
         ],
       ),
+      style: const TextStyle(fontSize: 13, color: Colors.black87),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
@@ -410,7 +481,8 @@ class _BookingSheetState extends State<_BookingSheet> {
     final start = DateTime(0, 1, 1, _startTime.hour, _startTime.minute);
     final end = DateTime(0, 1, 1, _endTime.hour, _endTime.minute);
     final diff = end.difference(start);
-    return diff.inMinutes <= 0 ? 0 : (diff.inMinutes / 60).round();
+    if (diff.inMinutes <= 0) return 0;
+    return (diff.inMinutes / 60).ceil();
   }
 
   List<DateTime> get _sortedDates {
@@ -423,7 +495,7 @@ class _BookingSheetState extends State<_BookingSheet> {
     final localizations = MaterialLocalizations.of(context);
     return localizations.formatTimeOfDay(
       time,
-      alwaysUse24HourFormat: false,
+      alwaysUse24HourFormat: true,
     );
   }
 
@@ -560,15 +632,24 @@ class _BookingSheetState extends State<_BookingSheet> {
                       context: context,
                       initialTime: _startTime,
                       helpText: 'Select start time',
+                      initialEntryMode: TimePickerEntryMode.dial,
+                      builder: (context, child) => MediaQuery(
+                        data: MediaQuery.of(context)
+                            .copyWith(alwaysUse24HourFormat: true),
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     );
                     if (picked == null) return;
-                    final normalized = picked.replacing(minute: 0);
+                    final normalized = picked;
                     setState(() {
                       _startTime = normalized;
                       if (!_isEndAfterStart(_endTime, _startTime)) {
+                        final adjusted =
+                            DateTime(0, 1, 1, _startTime.hour, _startTime.minute)
+                                .add(const Duration(hours: 1));
                         _endTime = TimeOfDay(
-                          hour: (_startTime.hour + 1).clamp(0, 23),
-                          minute: 0,
+                          hour: adjusted.hour % 24,
+                          minute: adjusted.minute,
                         );
                       }
                     });
@@ -585,9 +666,15 @@ class _BookingSheetState extends State<_BookingSheet> {
                       context: context,
                       initialTime: _endTime,
                       helpText: 'Select end time',
+                      initialEntryMode: TimePickerEntryMode.dial,
+                      builder: (context, child) => MediaQuery(
+                        data: MediaQuery.of(context)
+                            .copyWith(alwaysUse24HourFormat: true),
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     );
                     if (picked == null) return;
-                    final normalized = picked.replacing(minute: 0);
+                    final normalized = picked;
                     if (!_isEndAfterStart(normalized, _startTime)) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -644,6 +731,14 @@ class _BookingSheetState extends State<_BookingSheet> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+              ),
               onPressed: () {
                 if (!_isEndAfterStart(_endTime, _startTime)) {
                   ScaffoldMessenger.of(context).showSnackBar(

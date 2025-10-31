@@ -63,7 +63,7 @@ class BookingRepository {
     required DateTime eventDate,
   }) async {
     final duration = endTime.difference(startTime);
-    final hours = duration.inHours.clamp(1, 24);
+    final hours = (duration.inMinutes / 60).ceil().clamp(1, 24);
     final totalAmount = pricePerHour * hours;
     final docRef = await _collection.add({
       'userId': userId,
@@ -134,5 +134,18 @@ class BookingRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       });
     }
+  }
+
+  Future<void> submitRating({
+    required String bookingId,
+    required int rating,
+    String? review,
+  }) async {
+    await _collection.doc(bookingId).update({
+      'rating': rating,
+      'review': review,
+      'ratedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 }

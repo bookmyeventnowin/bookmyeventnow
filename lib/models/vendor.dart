@@ -21,6 +21,8 @@ class Vendor {
   final String categoryName;
   final List<String> categoryNames;
   final String location;
+  final String area;
+  final String pincode;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? subscriptionPaidAt;
@@ -47,6 +49,8 @@ class Vendor {
     required this.categoryName,
     required this.categoryNames,
     required this.location,
+    required this.area,
+    required this.pincode,
     required this.createdAt,
     required this.updatedAt,
     required this.subscriptionPaidAt,
@@ -173,6 +177,8 @@ class Vendor {
           (data['location'] as String?)?.trim() ??
           (data['address'] as String?)?.trim() ??
           '',
+      area: (data['area'] as String?)?.trim() ?? '',
+      pincode: _normalizePincode(data['pincode']),
       createdAt: parseTimestamp(data['createdAt']),
       updatedAt: parseTimestamp(data['updatedAt']),
       subscriptionPaidAt: parseTimestamp(data['subscriptionPaidAt']),
@@ -214,6 +220,8 @@ class Vendor {
       'imageUrl': imageUrl,
       'image': imageUrl,
       'location': location,
+      'area': area,
+      'pincode': pincode,
       'subscriptionPaidAt': subscriptionPaidAt != null
           ? Timestamp.fromDate(subscriptionPaidAt!)
           : null,
@@ -256,5 +264,11 @@ class Vendor {
   static double _toDouble(dynamic value) {
     if (value is num) return value.toDouble();
     return double.tryParse('$value') ?? 0;
+  }
+
+  static String _normalizePincode(dynamic value) {
+    if (value == null) return '';
+    if (value is num) return value.toInt().toString();
+    return value.toString().trim();
   }
 }

@@ -50,6 +50,9 @@ class Booking {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? paymentReference;
+  final int? rating;
+  final String? review;
+  final DateTime? ratedAt;
 
   const Booking({
     required this.id,
@@ -70,6 +73,9 @@ class Booking {
     required this.createdAt,
     required this.updatedAt,
     required this.paymentReference,
+    required this.rating,
+    required this.review,
+    required this.ratedAt,
   });
 
   factory Booking.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -93,6 +99,9 @@ class Booking {
       createdAt: _toDate(data['createdAt']),
       updatedAt: _toDate(data['updatedAt']),
       paymentReference: (data['paymentReference'] as String?)?.trim(),
+      rating: _toIntNullable(data['rating']),
+      review: (data['review'] as String?)?.trim(),
+      ratedAt: _toDate(data['ratedAt']),
     );
   }
 
@@ -113,6 +122,9 @@ class Booking {
       'endTime': endTime != null ? Timestamp.fromDate(endTime!) : null,
       'status': status.storageValue,
       'paymentReference': paymentReference,
+      'rating': rating,
+      'review': review,
+      'ratedAt': ratedAt != null ? Timestamp.fromDate(ratedAt!) : null,
       'createdAt': createdAt != null
           ? Timestamp.fromDate(createdAt!)
           : FieldValue.serverTimestamp(),
@@ -141,6 +153,9 @@ class Booking {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? paymentReference,
+    int? rating,
+    String? review,
+    DateTime? ratedAt,
   }) {
     return Booking(
       id: id ?? this.id,
@@ -161,12 +176,17 @@ class Booking {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       paymentReference: paymentReference ?? this.paymentReference,
+      rating: rating ?? this.rating,
+      review: review ?? this.review,
+      ratedAt: ratedAt ?? this.ratedAt,
     );
   }
 
   bool get awaitingVendor => status == BookingStatus.pending;
 
   bool get awaitingPayment => status == BookingStatus.accepted;
+
+  bool get hasRating => rating != null && rating! > 0;
 
   Duration? get duration {
     if (startTime == null || endTime == null) return null;
@@ -176,6 +196,12 @@ class Booking {
   static double _toDouble(dynamic value) {
     if (value is num) return value.toDouble();
     return double.tryParse('$value') ?? 0;
+  }
+
+  static int? _toIntNullable(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    return int.tryParse('$value');
   }
 
   static int _toInt(dynamic value) {
@@ -193,3 +219,7 @@ class Booking {
     return null;
   }
 }
+
+
+
+

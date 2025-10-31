@@ -1,4 +1,8 @@
+import 'dart:io';
+
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'models/category.dart';
 import 'models/vendor.dart';
@@ -8,11 +12,13 @@ class VendorEditSheet extends StatefulWidget {
   final List<Category> categories;
   final void Function(Category category, Map<String, dynamic> data) onSubmit;
   final VoidCallback? onDelete;
+  final String ownerUid;
 
   const VendorEditSheet({
     required this.vendor,
     required this.categories,
     required this.onSubmit,
+    required this.ownerUid,
     this.onDelete,
     super.key,
   });
@@ -34,10 +40,13 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
   late final TextEditingController _moreController;
   late final TextEditingController _imageController;
   late final TextEditingController _locationController;
+  late final TextEditingController _areaController;
+  late final TextEditingController _pincodeController;
 
   bool _ac = false;
   Category? _selectedCategory;
   bool _submitting = false;
+  bool _uploadingImage = false;
 
   @override
   void initState() {
@@ -55,6 +64,8 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     _moreController = TextEditingController(text: vendor?.moreDetails ?? '');
     _imageController = TextEditingController(text: vendor?.imageUrl ?? '');
     _locationController = TextEditingController(text: vendor?.location ?? '');
+    _areaController = TextEditingController(text: vendor?.area ?? '');
+    _pincodeController = TextEditingController(text: vendor?.pincode ?? '');
     _ac = vendor?.ac ?? false;
 
     if (widget.categories.isNotEmpty) {
@@ -102,7 +113,49 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     _moreController.dispose();
     _imageController.dispose();
     _locationController.dispose();
+    _areaController.dispose();
+    _pincodeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final selection = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (selection == null) return;
+    setState(() => _uploadingImage = true);
+    try {
+      final file = File(selection.path);
+      final storage = FirebaseStorage.instance;
+      final fileName =
+          '${widget.ownerUid}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = storage.ref().child('vendor_images').child(fileName);
+      await ref.putFile(file);
+      final url = await ref.getDownloadURL();
+      if (!mounted) return;
+      setState(() {
+        _imageController.text = url;      });
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to upload image: ${error.message ?? error.code}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to upload image: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingImage = false);
+      }
+    }
   }
 
   @override
@@ -210,7 +263,65 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
                 maxLines: 3,
               ),
               const SizedBox(height: 12),
-              _buildTextField(_imageController, label: 'Image URL'),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      _imageController,
+                      label: 'Image URL',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: _uploadingImage ? null : _pickAndUploadImage,
+                    icon: _uploadingImage
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_upload_outlined),
+                    label: const Text('Upload'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_imageController.text.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    _imageController.text,
+                    height: 120,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 120,
+                      alignment: Alignment.center,
+                      color: Colors.grey.shade200,
+                      child: const Text('Image unavailable'),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      _areaController,
+                      label: 'Area / locality',
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildTextField(
+                      _pincodeController,
+                      label: 'Pincode',
+                      keyboard: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               _buildTextField(_locationController, label: 'Location / address'),
               const SizedBox(height: 24),
@@ -294,6 +405,8 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
         'imageUrl': _imageController.text.trim(),
         'image': _imageController.text.trim(),
         'location': _locationController.text.trim(),
+        'area': _areaController.text.trim(),
+        'pincode': _pincodeController.text.trim(),
       };
 
       widget.onSubmit(_selectedCategory!, payload);
@@ -303,3 +416,5 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     }
   }
 }
+
+
