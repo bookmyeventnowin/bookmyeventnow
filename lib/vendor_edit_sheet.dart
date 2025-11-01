@@ -133,7 +133,13 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     if (!_canAddMoreImages) return;
     final remaining = _maxGalleryImages - _imageUrls.length;
     final picker = ImagePicker();
-    final selections = await picker.pickMultiImage(imageQuality: 85);
+    var selections = await picker.pickMultiImage(imageQuality: 85);
+    if (selections.isEmpty) {
+      final single = await picker.pickImage(imageQuality: 85, source: ImageSource.gallery);
+      if (single != null) {
+        selections = [single];
+      }
+    }
     if (selections.isEmpty) return;
 
     final allowedSelections = selections.take(remaining).toList();
@@ -395,7 +401,7 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
                     child: SwitchListTile(
                       value: _ac,
                       onChanged: (value) => setState(() => _ac = value),
-                      title: const Text('Air conditioning'),
+                      title: const Text('AC'),
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),

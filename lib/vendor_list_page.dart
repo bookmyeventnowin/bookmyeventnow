@@ -8,25 +8,64 @@ import 'services/booking_repository.dart';
 import 'services/vendor_repository.dart';
 import 'user_navigation.dart';
 
-class VendorListPage extends StatelessWidget {
-  VendorListPage({required this.category, super.key});
+const _creamBackground = Color(0xFFFEFBE7);
+const _vendorCardBackground = Color(0xFFE4EDD5);
+const _vendorPrimaryText = Color(0xFF0E3A28);
+const _vendorSecondaryText = Color(0xFF1A4A33);
+const _vendorButtonColor = Color(0xFF0F5B33);
+const _vendorAvatarBackground = Color(0xFF0C4227);
+
+const _detailCardColor = Color(0xFFF6EFD9);
+const _detailChipColor = Color(0xFFE4EDD5);
+const _detailChipText = Color(0xFF1D4B2B);
+const _detailMutedText = Color(0xFF4B624B);
+const _detailDivider = Color(0xFFE0D7BF);
+
+const _bookingSheetBackground = Color(0xFFF5EBD5);
+const _bookingChipColor = Color(0xFFE8F0DA);
+const _bookingChipSelected = Color(0xFFD3E1C0);
+const _bookingChipText = Color(0xFF1D4B2B);
+const _bookingMutedText = Color(0xFF5B7053);
+const _bookingBorderColor = Color(0xFFD6CCB5);
+
+class VendorListPage extends StatefulWidget {
+  const VendorListPage({required this.category, super.key});
 
   final Category category;
+
+  @override
+  State<VendorListPage> createState() => _VendorListPageState();
+}
+
+class _VendorListPageState extends State<VendorListPage> {
   final BookingRepository _bookingRepository = BookingRepository();
   final VendorRepository _vendorRepository = VendorRepository();
+  final TextEditingController _filterController = TextEditingController();
+  final FocusNode _filterFocusNode = FocusNode();
+  String _filterQuery = '';
+
+  @override
+  void dispose() {
+    _filterController.dispose();
+    _filterFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final heading = widget.category.name;
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: _creamBackground,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.2,
-        foregroundColor: Colors.black87,
-        title: Text('Vendors: ${category.name}'),
+        backgroundColor: Colors.black,
+        elevation: 0,
+        foregroundColor: Colors.white,
+        title: Text('Vendors: $heading'),
       ),
       body: StreamBuilder<List<Vendor>>(
-        stream: _vendorRepository.streamVendorsForCategory(category: category),
+        stream: _vendorRepository.streamVendorsForCategory(
+          category: widget.category,
+        ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -39,19 +78,38 @@ class VendorListPage extends StatelessWidget {
           }
 
           final vendors = snapshot.data ?? const <Vendor>[];
-          if (vendors.isEmpty) {
-            return const _EmptyVendorState();
-          }
+          final filtered = _applyFilter(vendors);
 
           return ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            itemCount: vendors.length + 1,
+            itemCount: filtered.length + 2,
             separatorBuilder: (context, index) => const SizedBox(height: 16),
             itemBuilder: (context, index) {
               if (index == 0) {
-                return _VendorHeader(count: vendors.length);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _VendorHeader(count: vendors.length),
+                    const SizedBox(height: 16),
+                    _buildFilterField(),
+                    const SizedBox(height: 16),
+                  ],
+                );
               }
-              final vendor = vendors[index - 1];
+              if (index == filtered.length + 1) {
+                if (vendors.isEmpty) return const _EmptyVendorState();
+                if (filtered.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: _ErrorState(
+                      message:
+                          'No vendors match your area or pincode filter. Try clearing the search.',
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              }
+              final vendor = filtered[index - 1];
               return _VendorCard(
                 vendor: vendor,
                 onBook: () => startVendorBookingFlow(
@@ -60,6 +118,8 @@ class VendorListPage extends StatelessWidget {
                   bookingRepository: _bookingRepository,
                 ),
                 onViewDetails: () => _openVendorDetails(context, vendor),
+                ratingStream:
+                    _bookingRepository.streamVendorRatingSummary(vendor.id),
               );
             },
           );
@@ -67,7 +127,56 @@ class VendorListPage extends StatelessWidget {
       ),
       bottomNavigationBar: ValueListenableBuilder<int>(
         valueListenable: userNavIndex,
-        builder: (_, index, __) => UserBottomNav(currentIndex: index),
+        builder: (_, index, __) => UserBottomNav(
+          currentIndex: index,
+          onNavigate: (next) {
+            userNavIndex.value = next;
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              navigateUserTab(context, next);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  List<Vendor> _applyFilter(List<Vendor> vendors) {
+    final query = _filterQuery.trim().toLowerCase();
+    if (query.isEmpty) return vendors;
+    return vendors.where((vendor) {
+      final pin = vendor.pincode.toLowerCase();
+      final area = vendor.area.toLowerCase();
+      return pin.contains(query) || area.contains(query);
+    }).toList();
+  }
+
+  Widget _buildFilterField() {
+    return TextField(
+      controller: _filterController,
+      focusNode: _filterFocusNode,
+      onChanged: (value) => setState(() => _filterQuery = value),
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: _filterQuery.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear filter',
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  _filterController.clear();
+                  setState(() => _filterQuery = '');
+                  _filterFocusNode.requestFocus();
+                },
+              ),
+        hintText: 'Filter vendors by area or pincode',
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }
@@ -102,6 +211,7 @@ Future<void> startVendorBookingFlow({
   final selection = await showModalBottomSheet<_BookingSelection>(
     context: context,
     isScrollControlled: true,
+    backgroundColor: Colors.transparent,
     builder: (_) => _BookingSheet(vendor: vendor),
   );
   if (selection == null) return;
@@ -201,84 +311,150 @@ class _VendorCard extends StatelessWidget {
     required this.vendor,
     required this.onBook,
     required this.onViewDetails,
+    required this.ratingStream,
   });
 
   final Vendor vendor;
   final VoidCallback onBook;
   final VoidCallback onViewDetails;
+  final Stream<RatingSummary> ratingStream;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onViewDetails,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _VendorAvatar(imageUrl: vendor.imageUrl),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      vendor.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+    return StreamBuilder<RatingSummary>(
+      stream: ratingStream,
+      initialData: RatingSummary.empty,
+      builder: (context, snapshot) {
+        final ratingSummary = snapshot.data ?? RatingSummary.empty;
+        return Card(
+          color: _vendorCardBackground,
+          surfaceTintColor: _vendorCardBackground,
+          elevation: 2,
+          shadowColor: Colors.black.withValues(alpha: 0.12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onViewDetails,
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _VendorAvatar(imageUrl: vendor.imageUrl),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              vendor.name,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: _vendorPrimaryText,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              vendor.type.isNotEmpty ? vendor.type : 'Vendor',
+                              style: const TextStyle(
+                                color: _vendorSecondaryText,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (ratingSummary.hasRatings) ...[
+                                  const Icon(
+                                    Icons.star,
+                                    size: 16,
+                                    color: Colors.amber,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${ratingSummary.average!.toStringAsFixed(1)} (${ratingSummary.count})',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: _vendorPrimaryText,
+                                    ),
+                                  ),
+                                ] else ...[
+                                  const Icon(
+                                    Icons.star_border,
+                                    size: 16,
+                                    color: _vendorSecondaryText,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Text(
+                                    'No ratings yet',
+                                    style: TextStyle(
+                                      color: _vendorSecondaryText,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      vendor.type.isNotEmpty ? vendor.type : 'Vendor',
-                      style: const TextStyle(color: Colors.black54),
-                    ),
-                    const SizedBox(height: 8),
-                    _VendorFacts(vendor: vendor),
-                    if (vendor.occasions.isNotEmpty ||
-                        vendor.moreDetails.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      if (vendor.occasions.isNotEmpty)
-                        Text(
-                          'Occasions: ${vendor.occasions.join(', ')}',
-                          style: const TextStyle(color: Colors.black54),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        onPressed: onBook,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _vendorButtonColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
                         ),
-                      if (vendor.moreDetails.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          vendor.moreDetails,
-                          style: const TextStyle(color: Colors.black54),
+                        icon: const Icon(Icons.event_available_outlined),
+                        label: const Text('Book'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _VendorFacts(vendor: vendor),
+                  if (vendor.occasions.isNotEmpty ||
+                      vendor.moreDetails.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    if (vendor.occasions.isNotEmpty)
+                      Text(
+                        'Occasions: ${vendor.occasions.join(', ')}',
+                        style: const TextStyle(
+                          color: _vendorSecondaryText,
+                          fontWeight: FontWeight.w500,
                         ),
-                      ],
+                      ),
+                    if (vendor.moreDetails.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        vendor.moreDetails,
+                        style: const TextStyle(
+                          color: _vendorSecondaryText,
+                        ),
+                      ),
                     ],
                   ],
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: onBook,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                ),
-                icon: const Icon(Icons.event_available_outlined),
-                label: const Text('Book'),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -315,11 +491,15 @@ class _VendorAvatar extends StatelessWidget {
   }
 
   Widget _fallback(ThemeData theme) {
-    return CircleAvatar(
-      radius: 28,
-      backgroundColor: theme.colorScheme.primaryContainer,
-      foregroundColor: theme.colorScheme.primary,
-      child: const Icon(Icons.storefront, size: 28),
+    return Container(
+      height: 56,
+      width: 56,
+      decoration: BoxDecoration(
+        color: _vendorAvatarBackground,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      alignment: Alignment.center,
+      child: const Icon(Icons.storefront, size: 28, color: Colors.white),
     );
   }
 
@@ -357,9 +537,7 @@ class _VendorFacts extends StatelessWidget {
         left: vendor.area.isNotEmpty
             ? _Fact(label: 'Area', value: vendor.area)
             : null,
-        right: vendor.pincode.isNotEmpty
-            ? _Fact(label: 'Pincode', value: vendor.pincode)
-            : null,
+        right: null,
       ),
       _FactRow(
         left: vendor.location.isNotEmpty
@@ -369,15 +547,18 @@ class _VendorFacts extends StatelessWidget {
       ),
     ];
 
+    final children = <Widget>[];
+    for (final row in rows) {
+      if (!row.hasContent) continue;
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 4));
+      }
+      children.add(_FactRowWidget(row: row));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final row in rows)
-          if (row.hasContent) ...[
-            _FactRowWidget(row: row),
-            const SizedBox(height: 4),
-          ],
-      ],
+      children: children,
     );
   }
 }
@@ -406,42 +587,58 @@ class _FactRowWidget extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: _FactCell(fact: row.left)),
+        Expanded(
+          child: _FactCell(
+            fact: row.left,
+            alignment: Alignment.centerLeft,
+          ),
+        ),
         if (row.left != null && row.right != null)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 6),
             child: Text('|', style: TextStyle(color: Colors.black26)),
           ),
-        Expanded(child: _FactCell(fact: row.right)),
+        Expanded(
+          child: _FactCell(
+            fact: row.right,
+            alignment: Alignment.centerRight,
+          ),
+        ),
       ],
     );
   }
 }
 
 class _FactCell extends StatelessWidget {
-  const _FactCell({required this.fact});
+  const _FactCell({required this.fact, this.alignment = Alignment.centerLeft});
 
   final _Fact? fact;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
     if (fact == null) return const SizedBox.shrink();
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: '${fact!.label}: ',
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
+    return Align(
+      alignment: alignment,
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '${fact!.label}: ',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: _vendorPrimaryText,
+              ),
             ),
-          ),
-          TextSpan(text: fact!.value),
-        ],
+            TextSpan(text: fact!.value),
+          ],
+        ),
+        style: const TextStyle(
+          fontSize: 13,
+          color: _vendorSecondaryText,
+          height: 1.3,
+        ),
       ),
-      style: const TextStyle(fontSize: 13, color: Colors.black87),
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
     );
   }
 }
@@ -503,17 +700,18 @@ class _BookingSheetState extends State<_BookingSheet> {
       now.month,
       now.day,
     ).add(const Duration(days: 1));
-    _selectedDates.add(_initialDate);
     _startTime = const TimeOfDay(hour: 10, minute: 0);
-    _endTime = const TimeOfDay(hour: 13, minute: 0);
+    _endTime = const TimeOfDay(hour: 11, minute: 0);
   }
 
   int get _selectedHours {
-    final start = DateTime(0, 1, 1, _startTime.hour, _startTime.minute);
-    final end = DateTime(0, 1, 1, _endTime.hour, _endTime.minute);
-    final diff = end.difference(start);
-    if (diff.inMinutes <= 0) return 0;
-    return (diff.inMinutes / 60).ceil();
+    final startMinutes = _minutesOf(_startTime);
+    final endMinutes = _minutesOf(_endTime);
+    final rawDiff = endMinutes - startMinutes;
+    if (rawDiff <= 0) return 0;
+    final diffMinutes = rawDiff > 24 * 60 ? 24 * 60 : rawDiff;
+    final hours = (diffMinutes / 60).ceil();
+    return hours.clamp(1, 24);
   }
 
   List<DateTime> get _sortedDates {
@@ -526,7 +724,7 @@ class _BookingSheetState extends State<_BookingSheet> {
     final localizations = MaterialLocalizations.of(context);
     return localizations.formatTimeOfDay(
       time,
-      alwaysUse24HourFormat: true,
+      alwaysUse24HourFormat: false,
     );
   }
 
@@ -589,228 +787,312 @@ class _BookingSheetState extends State<_BookingSheet> {
   @override
   Widget build(BuildContext context) {
     final hours = _selectedHours <= 0 ? 1 : _selectedHours;
-    final perDateTotal = widget.vendor.price * hours;
     final selectionCount = _selectedDates.length;
-    final overallTotal = perDateTotal * (selectionCount == 0 ? 1 : selectionCount);
-    final durationLabel = '$hours hr${hours == 1 ? '' : 's'}';
+    final perDateTotal = widget.vendor.price * hours;
+    final overallTotal =
+        selectionCount == 0 ? 0.0 : perDateTotal * selectionCount;
+    final durationLabel = '$hours ${hours == 1 ? 'hour' : 'hours'}';
     final timeLabel = '${_formatTime(_startTime)} - ${_formatTime(_endTime)}';
+    final datesSelectedLabel = selectionCount == 0
+        ? 'No dates selected. Tap "Add date" to get started.'
+        : '$selectionCount date${selectionCount == 1 ? '' : 's'} selected';
+    final canConfirm =
+        selectionCount > 0 && _isEndAfterStart(_endTime, _startTime);
 
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 24,
-        right: 24,
-        top: 24,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Book ${widget.vendor.name}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: _bookingSheetBackground,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: _bookingBorderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Select event dates',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final date in _sortedDates)
-                InputChip(
-                  label: Text(_formatDate(date)),
-                  onDeleted: () => _removeDate(date),
-                  backgroundColor: const Color(0xFFF1EEFF),
-                ),
-              ActionChip(
-                avatar: const Icon(Icons.add, size: 18),
-                label: const Text('Add date'),
-                onPressed: _pickDate,
-                backgroundColor: const Color(0xFFE8E1FF),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${_selectedDates.length} date${_selectedDates.length == 1 ? '' : 's'} selected',
-            style: const TextStyle(color: Colors.black54),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _TimeField(
-                  label: 'Start time',
-                  value: _formatTime(_startTime),
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: _startTime,
-                      helpText: 'Select start time',
-                      initialEntryMode: TimePickerEntryMode.dial,
-                      builder: (context, child) => MediaQuery(
-                        data: MediaQuery.of(context)
-                            .copyWith(alwaysUse24HourFormat: true),
-                        child: child ?? const SizedBox.shrink(),
-                      ),
-                    );
-                    if (picked == null) return;
-                    final normalized = picked;
-                    setState(() {
-                      _startTime = normalized;
-                      if (!_isEndAfterStart(_endTime, _startTime)) {
-                        final adjusted =
-                            DateTime(0, 1, 1, _startTime.hour, _startTime.minute)
-                                .add(const Duration(hours: 1));
-                        _endTime = TimeOfDay(
-                          hour: adjusted.hour % 24,
-                          minute: adjusted.minute,
-                        );
-                      }
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _TimeField(
-                  label: 'End time',
-                  value: _formatTime(_endTime),
-                  onTap: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: _endTime,
-                      helpText: 'Select end time',
-                      initialEntryMode: TimePickerEntryMode.dial,
-                      builder: (context, child) => MediaQuery(
-                        data: MediaQuery.of(context)
-                            .copyWith(alwaysUse24HourFormat: true),
-                        child: child ?? const SizedBox.shrink(),
-                      ),
-                    );
-                    if (picked == null) return;
-                    final normalized = picked;
-                    if (!_isEndAfterStart(normalized, _startTime)) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('End time must be after start time.'),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-                    setState(() => _endTime = normalized);
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Time window',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              Text(timeLabel),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Estimated total',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_formatCurrency(overallTotal)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Book ${widget.vendor.name}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: _vendorPrimaryText,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: _bookingMutedText),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Select event dates',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: _bookingChipText,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final date in _sortedDates)
+                        FilterChip(
+                          label: Text(
+                            _formatDate(date),
+                            style: const TextStyle(
+                              color: _bookingChipText,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          selected: true,
+                          backgroundColor: _bookingChipColor,
+                          selectedColor: _bookingChipSelected,
+                          checkmarkColor: _bookingChipText,
+                          side: const BorderSide(color: _bookingBorderColor),
+                          onSelected: (_) => _removeDate(date),
+                          deleteIcon: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: _bookingMutedText,
+                          ),
+                          onDeleted: () => _removeDate(date),
+                        ),
+                      ActionChip(
+                        avatar: const Icon(Icons.add, size: 18, color: _bookingChipText),
+                        label: const Text(
+                          'Add date',
+                          style: TextStyle(
+                            color: _bookingChipText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onPressed: _pickDate,
+                        backgroundColor: _bookingChipColor,
+                        shape: RoundedRectangleBorder(
+                          side: const BorderSide(color: _bookingBorderColor),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_selectedDates.isEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No event dates chosen yet. Add at least one date to continue.',
+                      style: TextStyle(color: _bookingMutedText),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
                   Text(
-                    selectionCount <= 1
-                        ? 'for $durationLabel'
-                        : '$selectionCount dates x ${_formatCurrency(perDateTotal)} each',
+                    datesSelectedLabel,
                     style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 12,
+                      color: _bookingMutedText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _TimeField(
+                          label: 'Start time',
+                          value: _formatTime(_startTime),
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: _startTime,
+                              helpText: 'Select start time',
+                              initialEntryMode: TimePickerEntryMode.dial,
+                              builder: (context, child) => MediaQuery(
+                                data: MediaQuery.of(context)
+                                    .copyWith(alwaysUse24HourFormat: true),
+                                child: child ?? const SizedBox.shrink(),
+                              ),
+                            );
+                            if (picked == null) return;
+                            final normalized = picked;
+                            setState(() {
+                              _startTime = normalized;
+                              if (!_isEndAfterStart(_endTime, _startTime)) {
+                                int nextMinutes = _minutesOf(_startTime) + 60;
+                                if (nextMinutes >= 24 * 60) {
+                                  nextMinutes = (24 * 60) - 1;
+                                }
+                                _endTime = _timeFromMinutes(nextMinutes);
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _TimeField(
+                          label: 'End time',
+                          value: _formatTime(_endTime),
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: _endTime,
+                              helpText: 'Select end time',
+                              initialEntryMode: TimePickerEntryMode.dial,
+                              builder: (context, child) => MediaQuery(
+                                data: MediaQuery.of(context)
+                                    .copyWith(alwaysUse24HourFormat: true),
+                                child: child ?? const SizedBox.shrink(),
+                              ),
+                            );
+                            if (picked == null) return;
+                            final normalized = picked;
+                            if (!_isEndAfterStart(normalized, _startTime)) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content:
+                                        Text('End time must be after start time.'),
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+                            setState(() => _endTime = normalized);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Time window',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: _bookingChipText,
+                        ),
+                      ),
+                      Text(
+                        timeLabel,
+                        style: const TextStyle(color: _bookingMutedText),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Estimated total',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: _bookingChipText,
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _formatCurrency(overallTotal),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: _vendorPrimaryText,
+                            ),
+                          ),
+                          Text(
+                            selectionCount <= 1
+                                ? 'for $durationLabel'
+                                : '$selectionCount dates x ${_formatCurrency(perDateTotal)} each',
+                            style: const TextStyle(
+                              color: _bookingMutedText,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _vendorButtonColor,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: _bookingBorderColor,
+                        disabledForegroundColor: Colors.white70,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                      onPressed: canConfirm
+                          ? () {
+                              final slots = _sortedDates
+                                  .map(
+                                    (date) => _BookingSlot(
+                                      start: _merge(date, _startTime),
+                                      end: _merge(date, _endTime),
+                                    ),
+                                  )
+                                  .toList();
+                              Navigator.of(context).maybePop(
+                                _BookingSelection(slots: slots),
+                              );
+                            }
+                          : null,
+                      child: const Text('Confirm booking'),
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-              onPressed: () {
-                if (!_isEndAfterStart(_endTime, _startTime)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('End time must be after start time.'),
-                    ),
-                  );
-                  return;
-                }
-                if (_selectedDates.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Select at least one event date.'),
-                    ),
-                  );
-                  return;
-                }
-                final slots = _sortedDates
-                    .map(
-                      (date) => _BookingSlot(
-                        start: _merge(date, _startTime),
-                        end: _merge(date, _endTime),
-                      ),
-                    )
-                    .toList();
-                Navigator.of(context).maybePop(
-                  _BookingSelection(slots: slots),
-                );
-              },
-              child: const Text('Confirm booking'),
             ),
           ),
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
     );
   }
 
   bool _isEndAfterStart(TimeOfDay end, TimeOfDay start) {
-    return end.hour > start.hour ||
-        (end.hour == start.hour && end.minute > start.minute);
+    return _minutesOf(end) > _minutesOf(start);
+  }
+
+  int _minutesOf(TimeOfDay time) => time.hour * 60 + time.minute;
+
+  TimeOfDay _timeFromMinutes(int minutes) {
+    var clamped = minutes;
+    if (clamped < 0) clamped = 0;
+    if (clamped >= 24 * 60) clamped = (24 * 60) - 1;
+    final hour = clamped ~/ 60;
+    final minute = clamped % 60;
+    return TimeOfDay(hour: hour, minute: minute);
   }
 }
 
@@ -830,13 +1112,28 @@ class _TimeField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: _bookingChipText,
+          ),
+        ),
         const SizedBox(height: 6),
         OutlinedButton.icon(
           onPressed: onTap,
-          icon: const Icon(Icons.access_time),
-          label: Text(value),
+          icon: const Icon(Icons.access_time, color: _bookingChipText),
+          label: Text(
+            value,
+            style: const TextStyle(
+              color: _vendorPrimaryText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           style: OutlinedButton.styleFrom(
+            backgroundColor: Colors.white.withValues(alpha: 0.9),
+            foregroundColor: _bookingChipText,
+            side: const BorderSide(color: _bookingBorderColor),
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -954,11 +1251,11 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
   Widget build(BuildContext context) {
     final images = vendor.galleryImages;
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: _creamBackground,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0.2,
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
         title: Text(vendor.name),
       ),
       body: ListView(
@@ -1012,14 +1309,17 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
       return Container(
         height: 220,
         decoration: BoxDecoration(
-          color: Colors.grey.shade200,
+          color: _detailCardColor,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: _detailDivider),
         ),
         child: const Center(
           child: Text(
             'This vendor has not added photos yet.',
-            style: TextStyle(color: Colors.black54),
+            style: TextStyle(
+              color: _detailMutedText,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       );
@@ -1043,9 +1343,12 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
                   imageUrl,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                    color: Colors.grey.shade200,
+                    color: _detailCardColor,
                     alignment: Alignment.center,
-                    child: const Text('Image unavailable'),
+                    child: const Text(
+                      'Image unavailable',
+                      style: TextStyle(color: _detailMutedText),
+                    ),
                   ),
                 );
               },
@@ -1132,12 +1435,17 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
+              color: _vendorPrimaryText,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             vendor.type.isNotEmpty ? vendor.type : 'Vendor',
-            style: const TextStyle(color: Colors.black54, fontSize: 16),
+            style: const TextStyle(
+              color: _detailMutedText,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -1180,7 +1488,7 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
                 Expanded(
                   child: Text(
                     'Unable to load ratings: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.black54),
+                    style: const TextStyle(color: _detailMutedText),
                   ),
                 ),
               ],
@@ -1214,8 +1522,17 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
           return const _InfoCard(
             child: ListTile(
               leading: Icon(Icons.star_border, color: Colors.black54),
-              title: Text('Not rated yet'),
-              subtitle: Text('Be the first to rate this vendor after booking.'),
+              title: Text(
+                'Not rated yet',
+                style: TextStyle(
+                  color: _vendorPrimaryText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(
+                'Be the first to rate this vendor after booking.',
+                style: TextStyle(color: _detailMutedText),
+              ),
             ),
           );
         }
@@ -1228,9 +1545,16 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
             leading: const Icon(Icons.star, color: Colors.amber, size: 30),
             title: Text(
               '${average.toStringAsFixed(1)} / 5',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: _vendorPrimaryText,
+              ),
             ),
-            subtitle: Text('${ratings.length} review${ratings.length == 1 ? '' : 's'}'),
+            subtitle: Text(
+              '${ratings.length} review${ratings.length == 1 ? '' : 's'}',
+              style: const TextStyle(color: _detailMutedText),
+            ),
           ),
         );
       },
@@ -1244,7 +1568,11 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
         children: [
           const Text(
             'At a glance',
-            style: TextStyle(fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: _vendorPrimaryText,
+              fontSize: 16,
+            ),
           ),
           const SizedBox(height: 12),
           _VendorFacts(vendor: vendor),
@@ -1261,19 +1589,27 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
           if (vendor.moreDetails.isNotEmpty) ...[
             const Text(
               'Highlights',
-              style: TextStyle(fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: _vendorPrimaryText,
+                fontSize: 16,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               vendor.moreDetails,
-              style: const TextStyle(color: Colors.black87),
+              style: const TextStyle(color: _detailMutedText),
             ),
             if (vendor.occasions.isNotEmpty) const SizedBox(height: 16),
           ],
           if (vendor.occasions.isNotEmpty) ...[
             const Text(
               'Occasions served',
-              style: TextStyle(fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: _vendorPrimaryText,
+                fontSize: 16,
+              ),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -1283,8 +1619,11 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
                   .map(
                     (occasion) => Chip(
                       label: Text(occasion),
-                      backgroundColor: Colors.indigo.shade50,
-                      labelStyle: const TextStyle(color: Colors.indigo),
+                      backgroundColor: _detailChipColor,
+                      labelStyle: const TextStyle(
+                        color: _detailChipText,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   )
                   .toList(),
@@ -1304,6 +1643,10 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      color: _detailCardColor,
+      surfaceTintColor: _detailCardColor,
+      elevation: 3,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -1324,17 +1667,20 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.indigo.shade50,
+        color: _detailChipColor,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: Colors.indigo),
+          Icon(icon, size: 18, color: _detailChipText),
           const SizedBox(width: 6),
           Text(
             label,
-            style: const TextStyle(color: Colors.indigo),
+            style: const TextStyle(
+              color: _detailChipText,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),

@@ -73,6 +73,7 @@ flutter:
     - assets/communityhall_slide.png
     - assets/decoration_slide.png
     - assets/humanresouce_slide.png
+    - assets/icon/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

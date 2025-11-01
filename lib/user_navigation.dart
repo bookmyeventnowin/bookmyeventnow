@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
 
-const Color _navBackground = Color(0xFFF4F1FF);
+const Color _navBackground = Colors.black;
 
 /// Shared notifier so any part of the user experience can switch tabs.
 final ValueNotifier<int> userNavIndex = ValueNotifier<int>(0);
 
 void navigateUserTab(BuildContext context, int index) {
   userNavIndex.value = index;
-  Navigator.of(context).popUntil((route) => route.isFirst);
+  final navigator = Navigator.of(context);
+  if (navigator.canPop()) {
+    navigator.popUntil((route) => route.isFirst);
+  }
 }
 
 class UserBottomNav extends StatelessWidget {
   final int currentIndex;
-  const UserBottomNav({super.key, required this.currentIndex});
+  final void Function(int index)? onNavigate;
+  const UserBottomNav({
+    super.key,
+    required this.currentIndex,
+    this.onNavigate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -20,12 +28,15 @@ class UserBottomNav extends StatelessWidget {
       type: BottomNavigationBarType.fixed,
       backgroundColor: _navBackground,
       currentIndex: currentIndex,
-      selectedItemColor: Colors.black87,
-      unselectedItemColor: Colors.black54,
+      selectedItemColor: Colors.white,
+      unselectedItemColor: Colors.white70,
       showUnselectedLabels: true,
       onTap: (index) {
-        if (index == currentIndex) return;
-        navigateUserTab(context, index);
+        if (onNavigate != null) {
+          onNavigate!(index);
+        } else {
+          navigateUserTab(context, index);
+        }
       },
       items: const [
         BottomNavigationBarItem(

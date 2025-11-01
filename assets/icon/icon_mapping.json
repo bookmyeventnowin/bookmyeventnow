@@ -1,0 +1,42 @@
+﻿[
+    {
+        "Key":  "catering",
+        "Value":  "assets/icon/catering_icon.png",
+        "Name":  "catering"
+    },
+    {
+        "Key":  "communite hall",
+        "Value":  "assets/icon/Community Hall_icon.png",
+        "Name":  "communite hall"
+    },
+    {
+        "Key":  "community hall",
+        "Value":  "assets/icon/Community Hall_icon.png",
+        "Name":  "community hall"
+    },
+    {
+        "Key":  "communityhall",
+        "Value":  "assets/icon/Community Hall_icon.png",
+        "Name":  "communityhall"
+    },
+    {
+        "Key":  "decoration",
+        "Value":  "assets/icon/Decoration_icon.png",
+        "Name":  "decoration"
+    },
+    {
+        "Key":  "human resouce",
+        "Value":  "assets/icon/Human Resource_icon.png",
+        "Name":  "human resouce"
+    },
+    {
+        "Key":  "human resource",
+        "Value":  "assets/icon/Human Resource_icon.png",
+        "Name":  "human resource"
+    },
+    {
+        "Key":  "humanresource",
+        "Value":  "assets/icon/Human Resource_icon.png",
+        "Name":  "humanresource"
+    }
+]

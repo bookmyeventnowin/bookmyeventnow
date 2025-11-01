@@ -27,12 +27,14 @@ class UserHomePage extends StatefulWidget {
 }
 
 class _UserHomePageState extends State<UserHomePage> {
-  static const Color _milkWhite = Color(0xFFF4F1FF);
+  static const Color _milkWhite = Color(0xFFFEFBE7);
+  static const int _carouselLoopBase = 10000;
   final BookingRepository _bookingRepository = BookingRepository();
   final CategoryRepository _categoryRepository = CategoryRepository();
   final TextEditingController _searchController = TextEditingController();
   final PageController _carouselController = PageController(
     viewportFraction: 0.85,
+    initialPage: _carouselLoopBase ~/ 2,
   );
   Timer? _carouselTimer;
   int _carouselItemCount = 0;
@@ -51,6 +53,16 @@ class _UserHomePageState extends State<UserHomePage> {
     'human resource': 'assets/humanresouce_slide.png',
     'humanresource': 'assets/humanresouce_slide.png',
     'human resouce': 'assets/humanresouce_slide.png',
+  };
+  static const Map<String, String> _categoryIconAssets = {
+    'catering': 'assets/icon/catering_icon.png',
+    'communite hall': 'assets/icon/Community Hall_icon.png',
+    'community hall': 'assets/icon/Community Hall_icon.png',
+    'communityhall': 'assets/icon/Community Hall_icon.png',
+    'decoration': 'assets/icon/Decoration_icon.png',
+    'human resouce': 'assets/icon/Human Resource_icon.png',
+    'human resource': 'assets/icon/Human Resource_icon.png',
+    'humanresource': 'assets/icon/Human Resource_icon.png',
   };
 
   @override
@@ -87,17 +99,28 @@ class _UserHomePageState extends State<UserHomePage> {
   }
 
   void _startCarouselAutoPlay() {
-    _carouselTimer?.cancel();
-    if (_carouselItemCount <= 1 || _currentIndex != 0) {
-      _carouselTimer = null;
+    if (_currentIndex != 0 || _carouselItemCount <= 1) {
+      _stopCarouselAutoPlay();
       return;
     }
+
+    _carouselTimer?.cancel();
     _carouselTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (!mounted || !_carouselController.hasClients) return;
       if (_carouselItemCount <= 1) return;
-      final currentPage = _carouselController.page ??
-          _carouselIndexNotifier.value.toDouble();
-      final nextPage = (currentPage.round() + 1) % _carouselItemCount;
+
+      final currentPage =
+          _carouselController.page ?? _carouselIndexNotifier.value.toDouble();
+      var nextPage = currentPage.floor() + 1;
+      final upperBound = _carouselLoopBase - _carouselItemCount;
+      if (nextPage >= upperBound) {
+        final base = _carouselLoopBase ~/ 2;
+        final alignedBase = base - (base % _carouselItemCount);
+        _carouselController.jumpToPage(alignedBase);
+        _carouselIndexNotifier.value = alignedBase;
+        nextPage = alignedBase + 1;
+      }
+
       _carouselController.animateToPage(
         nextPage,
         duration: const Duration(milliseconds: 450),
@@ -124,6 +147,17 @@ class _UserHomePageState extends State<UserHomePage> {
     }
     // handle names with extra words like "Catering Services"
     for (final entry in _categorySlideAssets.entries) {
+      if (name.contains(entry.key)) return entry.value;
+    }
+    return null;
+  }
+
+  String? _iconForCategory(Category category) {
+    final name = category.name.trim().toLowerCase();
+    if (_categoryIconAssets.containsKey(name)) {
+      return _categoryIconAssets[name];
+    }
+    for (final entry in _categoryIconAssets.entries) {
       if (name.contains(entry.key)) return entry.value;
     }
     return null;
@@ -257,6 +291,8 @@ class _UserHomePageState extends State<UserHomePage> {
             _buildCategoryGrid(categories, isLoading),
             const SizedBox(height: 20),
             _buildCategoryCarousel(categories, isLoading),
+            const SizedBox(height: 20),
+            _buildPromiseCard(),
             const SizedBox(height: 32),
             _buildUserFooter(),
           ],
@@ -399,8 +435,8 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildAboutBmeCard() {
     const aboutBody =
-        'BME Now is India’s first all-in-one event services booking app, launched in 2025 to revolutionize how people plan and organize events.\n\n'
-        'With BME Now, you can book a wide range of event-related services hassle-free—no more long waits, no middlemen, and no unnecessary dependencies.';
+        "BME Now is India's first all-in-one event services booking app, launched in 2025 to revolutionize how people plan and organize events.\n\n"
+        "With BME Now, you can book a wide range of event-related services hassle-free\u2014no more long waits, no middlemen, and no unnecessary dependencies.";
     final highlights = [
       'One-stop booking for weddings, birthdays, corporate events, parties, and more.',
       'Browse and compare top-rated vendors with images and verified reviews.',
@@ -440,11 +476,11 @@ class _UserHomePageState extends State<UserHomePage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('•  ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('- ', style: TextStyle(fontWeight: FontWeight.w600)),
                     Expanded(
                       child: Text(
                         item,
-                        style: const TextStyle(color: Colors.black87, height: 1.4),
+                        style: const TextStyle(height: 1.3),
                       ),
                     ),
                   ],
@@ -519,7 +555,7 @@ class _UserHomePageState extends State<UserHomePage> {
                 prefixIcon: const Icon(Icons.search),
                 hintText: 'Search categories (e.g. Catering, Decoration)',
                 filled: true,
-                fillColor: const Color(0xFFF1F3F8),
+                fillColor: Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
                   borderSide: BorderSide.none,
@@ -537,6 +573,13 @@ class _UserHomePageState extends State<UserHomePage> {
                   'Music',
                 ])
                   ActionChip(
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: Colors.black.withValues(alpha: 0.1),
+                      ),
+                    ),
                     label: Text(suggestion),
                     onPressed: () {
                       _searchController.text = suggestion;
@@ -556,10 +599,23 @@ class _UserHomePageState extends State<UserHomePage> {
       final nextCount = categories.length;
       final countChanged = _carouselItemCount != nextCount;
       _carouselItemCount = nextCount;
+
       if (_carouselItemCount <= 1) {
         _stopCarouselAutoPlay();
-      } else if (countChanged || _carouselTimer == null) {
-        _startCarouselAutoPlay();
+      } else {
+        if (countChanged) {
+          final basePage = _carouselLoopBase ~/ 2;
+          final alignedPage = basePage - (basePage % _carouselItemCount);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_carouselController.hasClients) {
+              _carouselController.jumpToPage(alignedPage);
+              _carouselIndexNotifier.value = alignedPage;
+            }
+          });
+        }
+        if (countChanged || _carouselTimer == null) {
+          _startCarouselAutoPlay();
+        }
       }
     } else {
       _carouselItemCount = categories.length;
@@ -592,9 +648,10 @@ class _UserHomePageState extends State<UserHomePage> {
                               controller: _carouselController,
                               onPageChanged: (index) =>
                                   _carouselIndexNotifier.value = index,
-                              itemCount: categories.length,
                               itemBuilder: (context, index) {
-                                final category = categories[index];
+                                final displayIndex =
+                                    categories.isEmpty ? 0 : index % categories.length;
+                                final category = categories[displayIndex];
                                 final slideAsset =
                                     _assetForCategory(category);
 
@@ -674,9 +731,14 @@ class _UserHomePageState extends State<UserHomePage> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        ValueListenableBuilder<int>(
+                       ValueListenableBuilder<int>(
                           valueListenable: _carouselIndexNotifier,
                           builder: (context, currentIndex, _) {
+                            if (categories.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            final activeIndex =
+                                currentIndex % categories.length;
                             return Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: List.generate(
@@ -684,13 +746,13 @@ class _UserHomePageState extends State<UserHomePage> {
                                 (index) => AnimatedContainer(
                                   duration: const Duration(milliseconds: 200),
                                   curve: Curves.easeInOut,
-                                  width: currentIndex == index ? 18 : 8,
+                                  width: activeIndex == index ? 18 : 8,
                                   height: 6,
                                   margin: const EdgeInsets.symmetric(
                                     horizontal: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: currentIndex == index
+                                    color: activeIndex == index
                                         ? Colors.indigo
                                         : Colors.indigo.shade100,
                                     borderRadius: BorderRadius.circular(12),
@@ -753,35 +815,9 @@ class _UserHomePageState extends State<UserHomePage> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: SizedBox(
-                              height: 70,
-                              width: 70,
-                              child: Builder(
-                                builder: (_) {
-                                  if (_isValidUrl(category.imageUrl)) {
-                                    return Image.network(
-                                      category.imageUrl,
-                                      fit: BoxFit.cover,
-                                    );
-                                  }
-                                  final slideAsset = _assetForCategory(
-                                    category,
-                                  );
-                                  if (slideAsset != null) {
-                                    return Image.asset(
-                                      slideAsset,
-                                      fit: BoxFit.cover,
-                                    );
-                                  }
-                                  return Container(
-                                    color: Colors.grey.shade900,
-                                    alignment: Alignment.center,
-                                    child: const Icon(
-                                      Icons.photo,
-                                      color: Colors.white70,
-                                    ),
-                                  );
-                                },
-                              ),
+                              height: 110,
+                              width: 110,
+                              child: _buildCategoryIcon(category),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -796,6 +832,91 @@ class _UserHomePageState extends State<UserHomePage> {
                     ),
                 ],
               ),
+          ],
+        ),
+      ),
+    );
+}
+
+  Widget _buildCategoryIcon(Category category) {
+    final iconAsset = _iconForCategory(category);
+    if (iconAsset != null) {
+      return Image.asset(iconAsset, fit: BoxFit.cover);
+    }
+    if (_isValidUrl(category.imageUrl)) {
+      return Image.network(
+        category.imageUrl,
+        fit: BoxFit.cover,
+      );
+    }
+    final slideAsset = _assetForCategory(category);
+    if (slideAsset != null) {
+      return Image.asset(slideAsset, fit: BoxFit.cover);
+    }
+    return Container(
+      color: Colors.grey.shade900,
+      alignment: Alignment.center,
+      child: const Icon(Icons.photo, color: Colors.white70),
+    );
+  }
+
+  Widget _buildPromiseCard() {
+    return Card(
+      color: _milkWhite,
+      elevation: 6,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'BME Now Promise',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  PromiseBullet(text: 'Verified professional vendors'),
+                  SizedBox(height: 8),
+                  PromiseBullet(text: 'Hassle-free booking experience'),
+                  SizedBox(height: 8),
+                  PromiseBullet(text: 'Transparent pricing every time'),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Container(
+              height: 84,
+              width: 84,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFDCD3FF), Color(0xFFE7F5FF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(42),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.verified,
+                  size: 42,
+                  color: Colors.deepPurple,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1133,6 +1254,37 @@ class _UserHomePageState extends State<UserHomePage> {
     if (value.isEmpty) return false;
     final uri = Uri.tryParse(value);
     return uri != null && uri.hasScheme && uri.hasAuthority;
+  }
+}
+
+class PromiseBullet extends StatelessWidget {
+  const PromiseBullet({super.key, required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '- ',
+          style: TextStyle(
+            color: Colors.deepPurple,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.black87,
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -2279,5 +2431,6 @@ class _VendorMetric extends StatelessWidget {
     );
   }
 }
+
 
 

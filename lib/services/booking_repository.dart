@@ -2,6 +2,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/booking.dart';
 
+class RatingSummary {
+  final double? average;
+  final int count;
+  const RatingSummary({required this.average, required this.count});
+
+  static const RatingSummary empty =
+      RatingSummary(average: null, count: 0);
+
+  bool get hasRatings => count > 0 && average != null;
+}
+
 class BookingRepository {
   BookingRepository({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -147,5 +158,29 @@ class BookingRepository {
       'ratedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  Stream<RatingSummary> streamVendorRatingSummary(String vendorId) {
+    return _collection
+        .where('vendorId', isEqualTo: vendorId)
+        .snapshots()
+        .map((snapshot) {
+          if (snapshot.docs.isEmpty) {
+            return RatingSummary.empty;
+          }
+          double total = 0;
+          int count = 0;
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            final ratingRaw = data['rating'];
+            if (ratingRaw is num && ratingRaw > 0) {
+              total += ratingRaw.toDouble();
+              count++;
+            }
+          }
+          if (count == 0) return RatingSummary.empty;
+          final average = total / count;
+          return RatingSummary(average: average, count: count);
+        });
   }
 }

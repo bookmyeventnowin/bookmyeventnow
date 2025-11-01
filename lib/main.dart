@@ -9,6 +9,7 @@ import 'user_role_storage.dart';
 
 // If you used flutterfire CLI, you can import the generated options.
 // import 'firebase_options.dart';
+const Color _splashEndColor = Color(0xFFFEFBE7);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,7 +45,7 @@ class AuthGate extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const SplashScreen(showProgress: true);
         }
         final user = snapshot.data;
         if (user == null) {
@@ -54,7 +55,7 @@ class AuthGate extends StatelessWidget {
           future: UserRoleStorage.instance.loadRole(user.uid),
           builder: (context, roleSnapshot) {
             if (roleSnapshot.connectionState != ConnectionState.done) {
-              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+              return const SplashScreen(showProgress: true);
             }
             final role = roleSnapshot.data;
             if (role == AppRole.vendor) {
@@ -65,6 +66,42 @@ class AuthGate extends StatelessWidget {
             }
             return RoleRequiredPage(user: user);
           },
+        );
+      },
+    );
+  }
+}
+
+class SplashScreen extends StatelessWidget {
+  const SplashScreen({super.key, this.showProgress = false});
+
+  final bool showProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(begin: Colors.white, end: _splashEndColor),
+      duration: const Duration(seconds: 2),
+      curve: Curves.easeInOut,
+      builder: (context, color, _) {
+        return Scaffold(
+          backgroundColor: color ?? Colors.white,
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/bmen_logo.png',
+                  width: 140,
+                  height: 140,
+                ),
+                if (showProgress) ...[
+                  const SizedBox(height: 32),
+                  const CircularProgressIndicator(strokeWidth: 2),
+                ],
+              ],
+            ),
+          ),
         );
       },
     );
