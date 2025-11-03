@@ -88,11 +88,16 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     _emailController = TextEditingController(text: vendor?.email ?? '');
     _phoneController = TextEditingController(text: vendor?.phone ?? '');
     _serviceController = TextEditingController(text: vendor?.type ?? '');
-    _priceController = TextEditingController(text: vendor?.price == 0 ? '' : vendor!.price.toString());
-    _seatingController = TextEditingController(text: vendor?.capacity == 0 ? '' : vendor!.capacity.toString());
-    _parkingController =
-        TextEditingController(text: vendor?.parkingCapacity == 0 ? '' : vendor!.parkingCapacity.toString());
-    _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') ?? '');
+    String formatNumber(num? value) {
+      if (value == null || value == 0) return '';
+      if (value is double && value % 1 == 0) return value.toInt().toString();
+      return value.toString();
+    }
+
+    _priceController = TextEditingController(text: formatNumber(vendor?.price));
+    _seatingController = TextEditingController(text: formatNumber(vendor?.capacity));
+    _parkingController = TextEditingController(text: formatNumber(vendor?.parkingCapacity));
+_occasionsController = TextEditingController(text: vendor?.occasions.join(', ') ?? '');
     _moreController = TextEditingController(text: vendor?.moreDetails ?? '');
     _locationController = TextEditingController(text: vendor?.location ?? '');
     _areaController = TextEditingController(text: vendor?.area ?? '');
@@ -897,6 +902,10 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     }
   }
 }
+
+
+
+
 
 
 
