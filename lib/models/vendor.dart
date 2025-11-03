@@ -17,6 +17,7 @@ class Vendor {
   final String moreDetails;
   final String imageUrl;
   final List<String> galleryImages;
+  final List<VendorDecorationPackage> decorationPackages;
   final String categoryId;
   final List<String> categoryIds;
   final String categoryName;
@@ -46,6 +47,7 @@ class Vendor {
     required this.moreDetails,
     required this.imageUrl,
     required this.galleryImages,
+    required this.decorationPackages,
     required this.categoryId,
     required this.categoryIds,
     required this.categoryName,
@@ -167,6 +169,20 @@ class Vendor {
       return null;
     }
 
+    final decorationPackages = <VendorDecorationPackage>[];
+    final rawPackages = data['decorationPackages'];
+    if (rawPackages is Iterable) {
+      for (final item in rawPackages) {
+        final pkg = VendorDecorationPackage.fromMap(item);
+        if (pkg != null) {
+          decorationPackages.add(pkg);
+          if (pkg.imageUrl.isNotEmpty) {
+            addGalleryItem(pkg.imageUrl);
+          }
+        }
+      }
+    }
+
     return Vendor(
       id: id,
       ownerUid: (data['ownerUid'] as String?)?.trim() ?? '',
@@ -205,6 +221,7 @@ class Vendor {
         return '';
       })(),
       galleryImages: List.unmodifiable(galleryImages),
+      decorationPackages: List.unmodifiable(decorationPackages),
       categoryId: primaryCategoryId,
       categoryIds: categoryIds.toSet().toList(),
       categoryName: primaryCategoryName,
@@ -257,6 +274,8 @@ class Vendor {
       'image': imageUrl,
       'galleryImages': galleryImages,
       'images': galleryImages,
+      'decorationPackages':
+          decorationPackages.map((pkg) => pkg.toMap()).toList(),
       'location': location,
       'area': area,
       'pincode': pincode,
@@ -308,5 +327,36 @@ class Vendor {
     if (value == null) return '';
     if (value is num) return value.toInt().toString();
     return value.toString().trim();
+  }
+}
+
+class VendorDecorationPackage {
+  final String imageUrl;
+  final double price;
+  const VendorDecorationPackage({
+    required this.imageUrl,
+    required this.price,
+  });
+
+  factory VendorDecorationPackage.fromJson(Map<String, dynamic> json) {
+    return VendorDecorationPackage(
+      imageUrl: (json['imageUrl'] as String?)?.trim() ?? '',
+      price: Vendor._toDouble(json['price']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'imageUrl': imageUrl,
+        'price': price,
+      };
+
+  static VendorDecorationPackage? fromMap(dynamic data) {
+    if (data is VendorDecorationPackage) return data;
+    if (data is Map<String, dynamic>) {
+      final imageUrl = (data['imageUrl'] as String?)?.trim();
+      if (imageUrl == null) return null;
+      return VendorDecorationPackage.fromJson(data);
+    }
+    return null;
   }
 }

@@ -143,6 +143,28 @@ class _LoginPageState extends State<LoginPage> {
                         foregroundColor: Colors.black87,
                       ),
                     ),
+                    const SizedBox(height: 36),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.asset(
+                        'assets/bmenow_sticks_carousel_black_static.png',
+                        height: 50,
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.center,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 130,
+                          width: double.infinity,
+                          color: Colors.black12,
+                          alignment: Alignment.center,
+                          child: const Text(
+                            '',
+                            style: TextStyle(color: Colors.white60),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 36),
                   ],
                 ),
                 TextButton(
@@ -168,3 +190,4 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 }
+

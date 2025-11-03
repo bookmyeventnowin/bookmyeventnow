@@ -8,25 +8,25 @@ import 'services/booking_repository.dart';
 import 'services/vendor_repository.dart';
 import 'user_navigation.dart';
 
-const _creamBackground = Color(0xFFFEFBE7);
-const _vendorCardBackground = Color(0xFFE4EDD5);
-const _vendorPrimaryText = Color(0xFF0E3A28);
-const _vendorSecondaryText = Color(0xFF1A4A33);
-const _vendorButtonColor = Color(0xFF0F5B33);
-const _vendorAvatarBackground = Color(0xFF0C4227);
+const _creamBackground = Color(0xFFFEFAF4);
+const _vendorCardBackground = Colors.white;
+const _vendorPrimaryText = Color(0xFF111827);
+const _vendorSecondaryText = Color(0xFF4B5563);
+const _vendorButtonColor = Colors.black;
+const _vendorAvatarBackground = Color(0xFFE5E7EB);
 
-const _detailCardColor = Color(0xFFF6EFD9);
-const _detailChipColor = Color(0xFFE4EDD5);
-const _detailChipText = Color(0xFF1D4B2B);
-const _detailMutedText = Color(0xFF4B624B);
-const _detailDivider = Color(0xFFE0D7BF);
+const _detailCardColor = Colors.white;
+const _detailChipColor = Color(0xFFF5F5F5);
+const _detailChipText = Color(0xFF111827);
+const _detailMutedText = Color(0xFF6B7280);
+const _detailDivider = Color(0xFFE5E7EB);
 
-const _bookingSheetBackground = Color(0xFFF5EBD5);
-const _bookingChipColor = Color(0xFFE8F0DA);
-const _bookingChipSelected = Color(0xFFD3E1C0);
-const _bookingChipText = Color(0xFF1D4B2B);
-const _bookingMutedText = Color(0xFF5B7053);
-const _bookingBorderColor = Color(0xFFD6CCB5);
+const _bookingSheetBackground = Color(0xFFFEFAF4);
+const _bookingChipColor = Colors.white;
+const _bookingChipSelected = Color(0xFFF1F5F9);
+const _bookingChipText = Color(0xFF111827);
+const _bookingMutedText = Color(0xFF6B7280);
+const _bookingBorderColor = Color(0xFFE5E7EB);
 
 class VendorListPage extends StatefulWidget {
   const VendorListPage({required this.category, super.key});

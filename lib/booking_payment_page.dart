@@ -6,7 +6,8 @@ import 'user_navigation.dart';
 import 'payment/razorpay_keys.dart';
 import 'services/booking_repository.dart';
 
-const Color _milkWhite = Color(0xFFF4F1FF);
+const Color _backgroundCream = Color(0xFFFEFAF4);
+const Color _cardSurface = Colors.white;
 
 class BookingPaymentPage extends StatefulWidget {
   final Booking booking;
@@ -43,11 +44,11 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
     final price = booking.pricePerHour;
     final timeRange = _formatTimeRange(booking);
     return Scaffold(
-      backgroundColor: _milkWhite,
+      backgroundColor: _backgroundCream,
       appBar: AppBar(
         title: const Text('Payment'),
-        backgroundColor: _milkWhite,
-        elevation: 0.2,
+        backgroundColor: _cardSurface,
+        elevation: 0,
         foregroundColor: Colors.black87,
       ),
       body: SingleChildScrollView(
@@ -56,7 +57,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Card(
-              color: _milkWhite,
+              color: _cardSurface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -109,8 +110,8 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                   _processing ? 'Processing...' : 'Pay with Razorpay (Test)',
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF2ECFF),
-                  foregroundColor: Colors.deepPurple,
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: const StadiumBorder(),

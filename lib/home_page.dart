@@ -27,7 +27,8 @@ class UserHomePage extends StatefulWidget {
 }
 
 class _UserHomePageState extends State<UserHomePage> {
-  static const Color _milkWhite = Color(0xFFFEFBE7);
+  static const Color _backgroundCream = Color(0xFFFEFAF4);
+  static const Color _cardSurface = Colors.white;
   static const int _carouselLoopBase = 10000;
   final BookingRepository _bookingRepository = BookingRepository();
   final CategoryRepository _categoryRepository = CategoryRepository();
@@ -178,7 +179,7 @@ class _UserHomePageState extends State<UserHomePage> {
     final photoUrl = widget.user.photoURL;
 
     return Scaffold(
-      backgroundColor: _milkWhite,
+      backgroundColor: _backgroundCream,
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
@@ -280,7 +281,7 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildHomeTab(List<Category> categories, bool isLoading) {
     return Container(
-      color: _milkWhite,
+      color: _backgroundCream,
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
@@ -303,7 +304,7 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildBookingsTab(List<Booking> bookings, bool isLoading) {
     return Container(
-      color: _milkWhite,
+      color: _backgroundCream,
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
@@ -325,19 +326,19 @@ class _UserHomePageState extends State<UserHomePage> {
     final photoUrl = user.photoURL;
 
     return Container(
-      color: _milkWhite,
+      color: _backgroundCream,
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Card(
-                color: _milkWhite,
-            elevation: 6,
-            shadowColor: Colors.black.withValues(alpha: 0.08),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
+                color: _cardSurface,
+                elevation: 6,
+                shadowColor: Colors.black.withValues(alpha: 0.08),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -446,7 +447,7 @@ class _UserHomePageState extends State<UserHomePage> {
     ];
 
     return Card(
-      color: _milkWhite,
+      color: _cardSurface,
       elevation: 6,
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -500,7 +501,7 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildHelpSupportCard() {
     return Card(
-      color: _milkWhite,
+      color: _cardSurface,
       elevation: 6,
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -534,7 +535,7 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildSearchHeader() {
     return Card(
-      color: _milkWhite,
+      color: _cardSurface,
       elevation: 6,
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -563,30 +564,57 @@ class _UserHomePageState extends State<UserHomePage> {
               ),
             ),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final suggestion in [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const suggestions = [
                   'Decoration',
                   'Catering',
                   'Photography',
                   'Music',
-                ])
-                  ActionChip(
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(
-                        color: Colors.black.withValues(alpha: 0.1),
+                ];
+                const spacing = 12.0;
+                final maxWidth = constraints.maxWidth;
+                final columns = maxWidth > 640
+                    ? 4
+                    : maxWidth > 480
+                        ? 3
+                        : 2;
+                final itemWidth =
+                    (maxWidth - (columns - 1) * spacing) / columns;
+
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    for (final suggestion in suggestions)
+                      SizedBox(
+                        width: itemWidth,
+                        child: ActionChip(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            side: BorderSide(
+                              color: Colors.black.withValues(alpha: 0.1),
+                            ),
+                          ),
+                          label: Center(
+                            child: Text(
+                              suggestion,
+                              style: const TextStyle(
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          onPressed: () {
+                            _searchController.text = suggestion;
+                            setState(() => _searchQuery = suggestion);
+                          },
+                        ),
                       ),
-                    ),
-                    label: Text(suggestion),
-                    onPressed: () {
-                      _searchController.text = suggestion;
-                      setState(() => _searchQuery = suggestion);
-                    },
-                  ),
-              ],
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -625,7 +653,7 @@ class _UserHomePageState extends State<UserHomePage> {
     }
 
     return Card(
-      color: _milkWhite,
+      color: _cardSurface,
       elevation: 6,
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -771,7 +799,7 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildCategoryGrid(List<Category> categories, bool isLoading) {
     return Card(
-      color: _milkWhite,
+      color: _cardSurface,
       elevation: 6,
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -862,7 +890,7 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildPromiseCard() {
     return Card(
-      color: _milkWhite,
+      color: _cardSurface,
       elevation: 6,
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -925,7 +953,7 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildUserBookingsCard(List<Booking> bookings, bool isLoading) {
     return Card(
-      color: _milkWhite,
+      color: _cardSurface,
       elevation: 6,
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -973,7 +1001,7 @@ class _UserHomePageState extends State<UserHomePage> {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: _milkWhite,
+                      color: _cardSurface,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(

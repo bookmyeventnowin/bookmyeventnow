@@ -9,7 +9,7 @@ import 'user_role_storage.dart';
 
 // If you used flutterfire CLI, you can import the generated options.
 // import 'firebase_options.dart';
-const Color _splashEndColor = Color(0xFFFEFBE7);
+const Color _splashEndColor = Color(0xFFFEFAF4);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,35 +36,56 @@ class BookMyEventNowApp extends StatelessWidget {
   }
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
   @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  late final Future<void> _minimumSplashDelay;
+
+  @override
+  void initState() {
+    super.initState();
+    _minimumSplashDelay = Future<void>.delayed(const Duration(seconds: 1));
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SplashScreen(showProgress: true);
-        }
-        final user = snapshot.data;
-        if (user == null) {
-          return const LoginPage();
-        }
-        return FutureBuilder<AppRole?>(
-          future: UserRoleStorage.instance.loadRole(user.uid),
-          builder: (context, roleSnapshot) {
-            if (roleSnapshot.connectionState != ConnectionState.done) {
+    return FutureBuilder<void>(
+      future: _minimumSplashDelay,
+      builder: (context, splashSnapshot) {
+        final splashDone =
+            splashSnapshot.connectionState == ConnectionState.done;
+        return StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, snapshot) {
+            if (!splashDone || snapshot.connectionState == ConnectionState.waiting) {
               return const SplashScreen(showProgress: true);
             }
-            final role = roleSnapshot.data;
-            if (role == AppRole.vendor) {
-              return VendorHomePage(user: user);
+            final user = snapshot.data;
+            if (user == null) {
+              return const LoginPage();
             }
-            if (role == AppRole.user) {
-              return UserHomePage(user: user);
-            }
-            return RoleRequiredPage(user: user);
+            return FutureBuilder<AppRole?>(
+              future: UserRoleStorage.instance.loadRole(user.uid),
+              builder: (context, roleSnapshot) {
+                if (!splashDone ||
+                    roleSnapshot.connectionState != ConnectionState.done) {
+                  return const SplashScreen(showProgress: true);
+                }
+                final role = roleSnapshot.data;
+                if (role == AppRole.vendor) {
+                  return VendorHomePage(user: user);
+                }
+                if (role == AppRole.user) {
+                  return UserHomePage(user: user);
+                }
+                return RoleRequiredPage(user: user);
+              },
+            );
           },
         );
       },

@@ -3,9 +3,29 @@ import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mime/mime.dart';
 
 import 'models/category.dart';
 import 'models/vendor.dart';
+
+class _DecorationPackageEntry {
+  _DecorationPackageEntry({
+    required this.imageUrl,
+    double price = 0,
+  }) : priceController = TextEditingController(
+            text: price == 0
+                ? ''
+                : price % 1 == 0
+                    ? price.toStringAsFixed(0)
+                    : price.toStringAsFixed(2));
+
+  String imageUrl;
+  final TextEditingController priceController;
+
+  double get price => double.tryParse(priceController.text.trim()) ?? 0;
+
+  void dispose() => priceController.dispose();
+}
 
 class VendorEditSheet extends StatefulWidget {
   final Vendor? vendor;
@@ -43,12 +63,22 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
   late final TextEditingController _pincodeController;
 
   static const int _maxGalleryImages = 6;
+  static const List<String> _placeholderImages = [
+    'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
+    'https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=900&q=80',
+    'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=900&q=80',
+    'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&w=900&q=80',
+    'https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?auto=format&fit=crop&w=900&q=80',
+    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80',
+  ];
   final List<String> _imageUrls = [];
+  final List<_DecorationPackageEntry> _decorationPackages = [];
 
   bool _ac = false;
   Category? _selectedCategory;
   bool _submitting = false;
   bool _uploadingImage = false;
+  int _placeholderIndex = 0;
 
   @override
   void initState() {
@@ -79,6 +109,17 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
 
     if (widget.categories.isNotEmpty) {
       _selectedCategory = _resolveInitialCategory(widget.categories, vendor);
+    }
+
+    if (vendor != null && vendor.decorationPackages.isNotEmpty) {
+      for (final pkg in vendor.decorationPackages) {
+        _decorationPackages.add(
+          _DecorationPackageEntry(
+            imageUrl: pkg.imageUrl,
+            price: pkg.price,
+          ),
+        );
+      }
     }
   }
 
@@ -123,11 +164,19 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     _locationController.dispose();
     _areaController.dispose();
     _pincodeController.dispose();
+    for (final entry in _decorationPackages) {
+      entry.dispose();
+    }
     super.dispose();
   }
 
   bool get _canAddMoreImages =>
       !_uploadingImage && _imageUrls.length < _maxGalleryImages;
+
+  bool get _isDecoration {
+    final name = _selectedCategory?.name.toLowerCase() ?? '';
+    return name.contains('decor');
+  }
 
   Future<void> _pickAndUploadImages() async {
     if (!_canAddMoreImages) return;
@@ -143,38 +192,16 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     if (selections.isEmpty) return;
 
     final allowedSelections = selections.take(remaining).toList();
-    final validSelections = <XFile>[];
-    for (final selection in allowedSelections) {
-      if (_isSupportedImage(selection)) {
-        validSelections.add(selection);
-      } else {
-        _showSnack('Only JPEG and PNG images are supported.');
-      }
-    }
-    if (validSelections.isEmpty) return;
 
     setState(() => _uploadingImage = true);
     try {
-      final storage = FirebaseStorage.instance;
-      for (final selection in validSelections) {
-        final file = File(selection.path);
-        final timestamp = DateTime.now().microsecondsSinceEpoch;
-        final extension = _fileExtension(selection).toLowerCase();
-        final ref = storage
-            .ref()
-            .child('vendor_images')
-            .child('${widget.ownerUid}/$timestamp$extension');
-        await ref.putFile(file);
-        final url = await ref.getDownloadURL();
+      for (final selection in allowedSelections) {
+        final url = await _uploadImageForSelection(selection);
         if (!mounted) return;
-        setState(() => _imageUrls.add(url));
+        if (url != null) {
+          setState(() => _imageUrls.add(url));
+        }
       }
-    } on FirebaseException catch (error) {
-      if (!mounted) return;
-      _showSnack('Unable to upload image: ${error.message ?? error.code}');
-    } catch (error) {
-      if (!mounted) return;
-      _showSnack('Unable to upload image: $error');
     } finally {
       if (mounted) {
         setState(() => _uploadingImage = false);
@@ -192,23 +219,303 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     }
   }
 
-  bool _isSupportedImage(XFile file) {
-    final ext = _fileExtension(file).toLowerCase();
-    return ext == '.jpg' || ext == '.jpeg' || ext == '.png';
+  Future<void> _addDecorationPackage() async {
+    if (_uploadingImage) return;
+    final picker = ImagePicker();
+    final selection = await picker.pickImage(
+      imageQuality: 85,
+      source: ImageSource.gallery,
+    );
+    if (selection == null) return;
+
+    setState(() => _uploadingImage = true);
+    try {
+      final url = await _uploadImageForSelection(selection);
+      if (!mounted) return;
+      if (url != null) {
+        setState(() {
+          _decorationPackages.add(
+            _DecorationPackageEntry(imageUrl: url),
+          );
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
   }
 
-  String _fileExtension(XFile file) {
-    final name = file.name;
-    final dotIndex = name.lastIndexOf('.');
-    if (dotIndex == -1) {
-      return '';
+  Future<void> _replaceDecorationPackageImage(int index) async {
+    if (_uploadingImage) return;
+    if (index < 0 || index >= _decorationPackages.length) return;
+    final picker = ImagePicker();
+    final selection = await picker.pickImage(
+      imageQuality: 85,
+      source: ImageSource.gallery,
+    );
+    if (selection == null) return;
+
+    setState(() => _uploadingImage = true);
+    try {
+      final url = await _uploadImageForSelection(selection);
+      if (!mounted) return;
+      if (url != null) {
+        setState(() => _decorationPackages[index].imageUrl = url);
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
     }
-    return name.substring(dotIndex);
+  }
+
+  bool _isStorageUnavailable(FirebaseException error) {
+    final message = error.message ?? '';
+    return message.contains('Not Found') ||
+        error.code == 'retry-limit-exceeded' ||
+        error.code == 'unknown';
+  }
+
+  String _nextPlaceholderImage() {
+    final url =
+        _placeholderImages[_placeholderIndex % _placeholderImages.length];
+    _placeholderIndex++;
+    return url;
+  }
+
+  Future<String?> _detectMimeType(XFile selection, File file) async {
+    if (selection.mimeType != null && selection.mimeType!.isNotEmpty) {
+      return selection.mimeType;
+    }
+    try {
+      final header = await file
+          .openRead(0, 32)
+          .fold<List<int>>(<int>[], (previous, element) {
+        final remaining = 32 - previous.length;
+        if (remaining <= 0) return previous;
+        if (element.length > remaining) {
+          return previous..addAll(element.take(remaining));
+        }
+        return previous..addAll(element);
+      });
+      if (header.isEmpty) return null;
+      return lookupMimeType(selection.name, headerBytes: header);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _deriveExtension(String fileName, String mimeType) {
+    final dot = fileName.lastIndexOf('.');
+    if (dot != -1 && dot < fileName.length - 1) {
+      return fileName.substring(dot);
+    }
+    if (mimeType.contains('/')) {
+      final subtype = mimeType.split('/').last;
+      return '.${subtype.toLowerCase()}';
+    }
+    return '.jpg';
+  }
+
+  String _sanitizeFileName(String original) {
+    final trimmed = original.trim();
+    if (trimmed.isEmpty) return 'image';
+    final withoutExt = trimmed.replaceAll(RegExp(r'\.[^\.]+$'), '');
+    final sanitized =
+        withoutExt.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    if (sanitized.isEmpty) return 'image';
+    return sanitized.length > 40 ? sanitized.substring(0, 40) : sanitized;
+  }
+
+  Future<String?> _uploadImageForSelection(XFile selection) async {
+    final file = File(selection.path);
+    if (!await file.exists()) {
+      _showSnack('Unable to access selected file ${selection.name}');
+      return null;
+    }
+    final storage = FirebaseStorage.instance;
+    try {
+      final mimeType = await _detectMimeType(selection, file) ?? 'image/jpeg';
+      final extension = _deriveExtension(selection.name, mimeType);
+      final sanitizedBase = _sanitizeFileName(selection.name);
+      final timestamp = DateTime.now().microsecondsSinceEpoch;
+      final objectName =
+          '${timestamp}_${_placeholderIndex}_$sanitizedBase$extension';
+      final ref = storage
+          .ref()
+          .child('vendor_images')
+          .child(widget.ownerUid)
+          .child(objectName);
+      final metadata = SettableMetadata(contentType: mimeType);
+      await ref.putFile(file, metadata);
+      return await ref.getDownloadURL();
+    } on FirebaseException catch (error) {
+      if (_isStorageUnavailable(error)) {
+        _showSnack(
+          'Cloud Storage is disabled for this project. Added a sample image instead.',
+        );
+        return _nextPlaceholderImage();
+      }
+      _showSnack('Unable to upload image: ${error.message ?? error.code}');
+    } catch (error) {
+      _showSnack('Unable to upload image: $error');
+    }
+    return null;
   }
 
   void _showSnack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Widget _buildDecorationPackagesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Decoration packages',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        if (_decorationPackages.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.local_florist_outlined,
+                  size: 40,
+                  color: Colors.black.withValues(alpha: 0.4),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Add images for your decoration themes. Each image can have its own price.',
+                  style: TextStyle(color: Colors.black54),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          )
+        else
+          Column(
+            children: [
+              for (var i = 0; i < _decorationPackages.length; i++)
+                _buildDecorationPackageCard(_decorationPackages[i], i),
+            ],
+          ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _addDecorationPackage,
+            icon: _uploadingImage
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add_photo_alternate_outlined),
+            label: const Text('Add package'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Packages can include sample images while storage is disabled.',
+          style: TextStyle(color: Colors.black45, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDecorationPackageCard(
+    _DecorationPackageEntry entry,
+    int index,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => _replaceDecorationPackageImage(index),
+            child: Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    entry.imageUrl,
+                    height: 90,
+                    width: 120,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 90,
+                      width: 120,
+                      color: Colors.grey.shade200,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.image_not_supported_outlined),
+                    ),
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: const Text(
+                    'Change',
+                    style: TextStyle(color: Colors.white, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: TextFormField(
+              controller: entry.priceController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Price (Rs)',
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: _uploadingImage
+                ? null
+                : () {
+                    setState(() {
+                      entry.dispose();
+                      _decorationPackages.removeAt(index);
+                    });
+                  },
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Remove',
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildGallerySection() {
@@ -229,52 +536,75 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        if (_imageUrls.isEmpty)
-          Container(
-            height: 120,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            alignment: Alignment.center,
-            child: const Text(
-              'No images yet. Upload up to 6 JPEG or PNG files.',
-              style: TextStyle(color: Colors.black54),
-              textAlign: TextAlign.center,
-            ),
-          )
-        else
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: _imageUrls.map(_buildGalleryThumbnail).toList(),
-          ),
         const SizedBox(height: 12),
-        ElevatedButton.icon(
-          onPressed: _canAddMoreImages ? _pickAndUploadImages : null,
-          icon: _uploadingImage
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              if (_imageUrls.isEmpty)
+                Column(
+                  children: [
+                    Icon(
+                      Icons.photo_library_outlined,
+                      size: 38,
+                      color: Colors.black.withValues(alpha: 0.4),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No images yet. Upload up to 6 images. If storage is disabled, sample images will be added.',
+                      style: TextStyle(color: Colors.black54),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 )
-              : const Icon(Icons.add_photo_alternate_outlined),
-          label: Text(
-            _canAddMoreImages
-                ? 'Add images'
-                : 'Maximum of $_maxGalleryImages reached',
+              else
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: _imageUrls.map(_buildGalleryThumbnail).toList(),
+                ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _canAddMoreImages ? _pickAndUploadImages : null,
+                  icon: _uploadingImage
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.cloud_upload_outlined),
+                  label: Text(
+                    _canAddMoreImages
+                        ? 'Upload images'
+                        : 'Maximum of $_maxGalleryImages reached',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  remaining > 0
+                      ? 'You can add $remaining more image${remaining == 1 ? '' : 's'}.'
+                      : 'Remove one to upload another image.',
+                  style: const TextStyle(color: Colors.black45, fontSize: 12),
+                ),
+              ),
+            ],
           ),
         ),
-        if (remaining > 0) ...[
-          const SizedBox(height: 6),
-          Text(
-            'You can add $remaining more image${remaining == 1 ? '' : 's'}.',
-            style: const TextStyle(color: Colors.black54, fontSize: 12),
-          ),
-        ],
       ],
     );
   }
@@ -359,7 +689,10 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
                   items: widget.categories
                       .map((category) => DropdownMenuItem(value: category, child: Text(category.name)))
                       .toList(),
-                  onChanged: (value) => setState(() => _selectedCategory = value),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _selectedCategory = value);
+                  },
                 )
               else
                 const Text(
@@ -367,47 +700,54 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
                   style: TextStyle(color: Colors.redAccent),
                 ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      _priceController,
-                      label: 'Price per hour (₹)',
-                      keyboard: TextInputType.number,
+              if (_isDecoration) ...[
+                _buildDecorationPackagesSection(),
+                const SizedBox(height: 12),
+              ] else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        _priceController,
+                        label: 'Price per hour (Rs)',
+                        keyboard: TextInputType.number,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildTextField(
-                      _seatingController,
-                      label: 'Seating capacity',
-                      keyboard: TextInputType.number,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildTextField(
+                        _seatingController,
+                        label: 'Seating capacity',
+                        keyboard: TextInputType.number,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      _parkingController,
-                      label: 'Parking capacity',
-                      keyboard: TextInputType.number,
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        _parkingController,
+                        label: 'Parking capacity',
+                        keyboard: TextInputType.number,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SwitchListTile(
-                      value: _ac,
-                      onChanged: (value) => setState(() => _ac = value),
-                      title: const Text('AC'),
-                      contentPadding: EdgeInsets.zero,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: SwitchListTile(
+                        value: _ac,
+                        onChanged: (value) => setState(() => _ac = value),
+                        title: const Text('AC'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildGallerySection(),
+                const SizedBox(height: 12),
+              ],
               _buildTextField(
                 _occasionsController,
                 label: 'Occasions (comma separated)',
@@ -421,8 +761,6 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
                 minLines: 1,
                 maxLines: 3,
               ),
-              const SizedBox(height: 12),
-              _buildGallerySection(),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -506,27 +844,47 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
       final seating = int.tryParse(_seatingController.text.trim()) ?? 0;
       final parking = int.tryParse(_parkingController.text.trim()) ?? 0;
 
-      final primaryImage = _imageUrls.isNotEmpty ? _imageUrls.first : '';
+      final isDecoration = _isDecoration;
+      final decorationPackages = isDecoration
+          ? _decorationPackages
+              .where((entry) => entry.imageUrl.isNotEmpty)
+              .map(
+                (entry) => {
+                  'imageUrl': entry.imageUrl,
+                  'price': entry.price,
+                },
+              )
+              .toList()
+          : const <Map<String, dynamic>>[];
+      final packageImages = decorationPackages
+          .map((pkg) => pkg['imageUrl'] as String)
+          .where((url) => url.isNotEmpty)
+          .toList();
+      final galleryImages =
+          isDecoration ? packageImages : List<String>.from(_imageUrls);
+      final primaryImage =
+          galleryImages.isNotEmpty ? galleryImages.first : '';
       final payload = <String, dynamic>{
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'type': _serviceController.text.trim(),
         'service': _serviceController.text.trim(),
-        'pricePerHour': price,
-        'price': price,
-        'seatingCapacity': seating,
-        'capacity': seating,
-        'parkingCapacity': parking,
-        'ac': _ac,
+        'pricePerHour': isDecoration ? 0 : price,
+        'price': isDecoration ? 0 : price,
+        'seatingCapacity': isDecoration ? 0 : seating,
+        'capacity': isDecoration ? 0 : seating,
+        'parkingCapacity': isDecoration ? 0 : parking,
+        'ac': isDecoration ? false : _ac,
         'occasions': occasions,
         'occasionsFor': occasions.join(', '),
         'more': _moreController.text.trim(),
         'moreDetails': _moreController.text.trim(),
         'imageUrl': primaryImage,
         'image': primaryImage,
-        'galleryImages': _imageUrls,
-        'images': _imageUrls,
+        'galleryImages': galleryImages,
+        'images': galleryImages,
+        'decorationPackages': decorationPackages,
         'location': _locationController.text.trim(),
         'area': _areaController.text.trim(),
         'pincode': _pincodeController.text.trim(),
@@ -539,5 +897,6 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     }
   }
 }
+
 
 
