@@ -1590,6 +1590,16 @@ class _VendorHomePageState extends State<VendorHomePage> {
     );
   }
 
+  bool _isDecorationVendor(Vendor vendor) {
+    final lowerType = vendor.type.toLowerCase();
+    if (lowerType.contains('decor')) return true;
+    final names = <String>{
+      vendor.categoryName.toLowerCase(),
+      ...vendor.categoryNames.map((name) => name.toLowerCase()),
+    };
+    return names.any((name) => name.contains('decor'));
+  }
+
   Widget _buildVendorOverview({
     required Vendor vendor,
     required List<Category> categories,
@@ -2229,31 +2239,39 @@ class _VendorHomePageState extends State<VendorHomePage> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _VendorMetric(
-                label: 'Rate / hr',
-                value: _formatCurrency(vendor.price),
-              ),
-              _VendorMetric(
-                label: 'Seating',
-                value: vendor.capacity == 0 ? 'N/A' : '${vendor.capacity}',
-              ),
-              _VendorMetric(
-                label: 'Parking',
-                value: vendor.parkingCapacity == 0
-                    ? 'N/A'
-                    : '${vendor.parkingCapacity}',
-              ),
-              _VendorMetric(
-                label: 'AC',
-                value: vendor.ac ? 'Available' : 'Not available',
-              ),
-            ],
-          ),
+          if (_isDecorationVendor(vendor)) ...[
+            const SizedBox(height: 16),
+            _DecorationPackageCarousel(
+              packages: vendor.decorationPackages,
+              formatCurrency: _formatCurrency,
+            ),
+          ] else ...[
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _VendorMetric(
+                  label: 'Rate / hr',
+                  value: _formatCurrency(vendor.price),
+                ),
+                _VendorMetric(
+                  label: 'Seating',
+                  value: vendor.capacity == 0 ? 'N/A' : '${vendor.capacity}',
+                ),
+                _VendorMetric(
+                  label: 'Parking',
+                  value: vendor.parkingCapacity == 0
+                      ? 'N/A'
+                      : '${vendor.parkingCapacity}',
+                ),
+                _VendorMetric(
+                  label: 'AC',
+                  value: vendor.ac ? 'Available' : 'Not available',
+                ),
+              ],
+            ),
+          ],
           if (vendor.moreDetails.isNotEmpty) ...[
             const SizedBox(height: 16),
             const Text(
@@ -2434,6 +2452,147 @@ class _ProfileDetailRow extends StatelessWidget {
   }
 }
 
+class _DecorationPackageCarousel extends StatefulWidget {
+  const _DecorationPackageCarousel({
+    required this.packages,
+    required this.formatCurrency,
+  });
+
+  final List<VendorDecorationPackage> packages;
+  final String Function(double value) formatCurrency;
+
+  @override
+  State<_DecorationPackageCarousel> createState() => _DecorationPackageCarouselState();
+}
+
+class _DecorationPackageCarouselState extends State<_DecorationPackageCarousel> {
+  late final PageController _controller;
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController(viewportFraction: 0.85);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.packages.isEmpty) {
+      return Container(
+        height: 160,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        ),
+        alignment: Alignment.center,
+        child: const Text(
+          'Add decoration packages to showcase images with prices.',
+          style: TextStyle(color: Colors.black54),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 180,
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: widget.packages.length,
+            onPageChanged: (index) => setState(() => _currentPage = index),
+            itemBuilder: (context, index) {
+              final package = widget.packages[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        package.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.grey.shade200,
+                          alignment: Alignment.center,
+                          child:
+                              const Icon(Icons.image_not_supported_outlined),
+                        ),
+                      ),
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Color.fromARGB(200, 0, 0, 0),
+                              Color.fromARGB(10, 0, 0, 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 16,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: Text(
+                            package.price <= 0
+                                ? 'Contact for pricing'
+                                : 'Package price: ',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            widget.packages.length,
+            (index) => AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              height: 8,
+              width: _currentPage == index ? 18 : 8,
+              decoration: BoxDecoration(
+                color: _currentPage == index
+                    ? Colors.black87
+                    : Colors.black26,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 class _VendorMetric extends StatelessWidget {
   final String label;
   final String value;
@@ -2459,6 +2618,10 @@ class _VendorMetric extends StatelessWidget {
     );
   }
 }
+
+
+
+
 
 
 
