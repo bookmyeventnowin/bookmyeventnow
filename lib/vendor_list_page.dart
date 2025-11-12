@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'models/booking.dart';
 import 'models/category.dart';
@@ -112,14 +113,21 @@ class _VendorListPageState extends State<VendorListPage> {
               final vendor = filtered[index - 1];
               return _VendorCard(
                 vendor: vendor,
-                onBook: () => startVendorBookingFlow(
-                  context: context,
-                  vendor: vendor,
-                  bookingRepository: _bookingRepository,
-                ),
+                onBook: () {
+                  if (_isCateringVendor(vendor)) {
+                    _openVendorDetails(context, vendor);
+                  } else {
+                    startVendorBookingFlow(
+                      context: context,
+                      vendor: vendor,
+                      bookingRepository: _bookingRepository,
+                    );
+                  }
+                },
                 onViewDetails: () => _openVendorDetails(context, vendor),
-                ratingStream:
-                    _bookingRepository.streamVendorRatingSummary(vendor.id),
+                ratingStream: _bookingRepository.streamVendorRatingSummary(
+                  vendor.id,
+                ),
               );
             },
           );
@@ -193,10 +201,18 @@ class _VendorListPageState extends State<VendorListPage> {
   }
 }
 
+class CateringProposalInput {
+  const CateringProposalInput({required this.menu, required this.guestCount});
+
+  final List<ProposalMenuItem> menu;
+  final int guestCount;
+}
+
 Future<void> startVendorBookingFlow({
   required BuildContext context,
   required Vendor vendor,
   required BookingRepository bookingRepository,
+  CateringProposalInput? cateringProposal,
 }) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) {
@@ -208,11 +224,17 @@ Future<void> startVendorBookingFlow({
     return;
   }
 
+  final isCateringFlow = cateringProposal != null && _isCateringVendor(vendor);
+
   final selection = await showModalBottomSheet<_BookingSelection>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _BookingSheet(vendor: vendor),
+    builder: (_) => _BookingSheet(
+      vendor: vendor,
+      isCateringProposal: isCateringFlow,
+      proposal: cateringProposal,
+    ),
   );
   if (selection == null) return;
 
@@ -241,21 +263,43 @@ Future<void> startVendorBookingFlow({
     }
 
     for (final slot in selection.slots) {
-      await bookingRepository.createBooking(
-        userId: user.uid,
-        userName: userName?.isNotEmpty == true
-            ? userName!
-            : (userEmail ?? 'User'),
-        userEmail: userEmail ?? '',
-        vendorId: vendor.id,
-        vendorOwnerUid: vendor.ownerUid,
-        vendorName: vendor.name,
-        vendorCategory: vendor.categoryName,
-        pricePerHour: vendor.price,
-        startTime: slot.start,
-        endTime: slot.end,
-        eventDate: slot.eventDate,
-      );
+      if (isCateringFlow) {
+        await bookingRepository.createCateringProposal(
+          userId: user.uid,
+          userName: userName?.isNotEmpty == true
+              ? userName!
+              : (userEmail ?? 'User'),
+          userEmail: userEmail ?? '',
+          vendorId: vendor.id,
+          vendorOwnerUid: vendor.ownerUid,
+          vendorName: vendor.name,
+          vendorCategory: vendor.categoryName,
+          menu: cateringProposal.menu,
+          guestCount: cateringProposal.guestCount,
+          startTime: slot.start,
+          endTime: slot.end,
+          eventDate: slot.eventDate,
+          deliveryTime: slot.start,
+          deliveryAddress: selection.deliveryAddress ?? '',
+          deliveryRequired: selection.deliveryRequired,
+        );
+      } else {
+        await bookingRepository.createBooking(
+          userId: user.uid,
+          userName: userName?.isNotEmpty == true
+              ? userName!
+              : (userEmail ?? 'User'),
+          userEmail: userEmail ?? '',
+          vendorId: vendor.id,
+          vendorOwnerUid: vendor.ownerUid,
+          vendorName: vendor.name,
+          vendorCategory: vendor.categoryName,
+          pricePerHour: vendor.price,
+          startTime: slot.start,
+          endTime: slot.end,
+          eventDate: slot.eventDate,
+        );
+      }
     }
 
     if (context.mounted) {
@@ -263,7 +307,11 @@ Future<void> startVendorBookingFlow({
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            requestCount == 1
+            isCateringFlow
+                ? (requestCount == 1
+                      ? 'Proposal sent! The vendor will respond with a quote.'
+                      : '$requestCount proposals sent! The vendor will respond with quotes.')
+                : requestCount == 1
                 ? 'Booking request sent! We will notify you once the vendor responds.'
                 : '$requestCount booking requests sent! We will notify you once the vendor responds.',
           ),
@@ -331,7 +379,9 @@ class _VendorCard extends StatelessWidget {
           surfaceTintColor: _vendorCardBackground,
           elevation: 2,
           shadowColor: Colors.black.withValues(alpha: 0.12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onViewDetails,
@@ -356,8 +406,6 @@ class _VendorCard extends StatelessWidget {
                                 fontWeight: FontWeight.w700,
                                 color: _vendorPrimaryText,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -443,9 +491,7 @@ class _VendorCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         vendor.moreDetails,
-                        style: const TextStyle(
-                          color: _vendorSecondaryText,
-                        ),
+                        style: const TextStyle(color: _vendorSecondaryText),
                       ),
                     ],
                   ],
@@ -457,6 +503,31 @@ class _VendorCard extends StatelessWidget {
       },
     );
   }
+}
+
+bool _isDecorationVendor(Vendor vendor) {
+  final type = vendor.type.toLowerCase();
+  if (type.contains('decor')) return true;
+  return vendor.categoryName.toLowerCase().contains('decor') ||
+      vendor.categoryNames.any((name) => name.toLowerCase().contains('decor'));
+}
+
+bool _isCateringVendor(Vendor vendor) {
+  final type = vendor.type.toLowerCase();
+  if (type.contains('cater')) return true;
+  if (vendor.categoryName.toLowerCase().contains('cater')) return true;
+  return vendor.categoryNames.any(
+    (name) => name.toLowerCase().contains('cater'),
+  );
+}
+
+bool _isHumanResourceVendor(Vendor vendor) {
+  final type = vendor.type.toLowerCase();
+  if (type.contains('human')) return true;
+  if (vendor.categoryName.toLowerCase().contains('human')) return true;
+  return vendor.categoryNames.any(
+    (name) => name.toLowerCase().contains('human'),
+  );
 }
 
 class _VendorAvatar extends StatelessWidget {
@@ -517,35 +588,105 @@ class _VendorFacts extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = <_FactRow>[
-      _FactRow(
-        left: _Fact(
-          label: 'Price/hr',
-          value: _formatCurrency(vendor.price),
+    final isDecoration = _isDecorationVendor(vendor);
+    final isCatering = _isCateringVendor(vendor);
+    final isHumanResource = _isHumanResourceVendor(vendor);
+    final hidePricing = isDecoration || isCatering || isHumanResource;
+    final rows = <_FactRow>[];
+
+    if (isHumanResource) {
+      rows.add(
+        _FactRow(
+          left: _Fact(
+            label: 'Experience',
+            value: vendor.experience.isEmpty ? 'N/A' : vendor.experience,
+          ),
+          right: _Fact(label: 'Rate/hr', value: _formatCurrency(vendor.price)),
         ),
-        right: vendor.capacity > 0
-            ? _Fact(label: 'Seating', value: '${vendor.capacity}')
-            : null,
-      ),
-      _FactRow(
-        left: vendor.parkingCapacity > 0
-            ? _Fact(label: 'Parking', value: '${vendor.parkingCapacity}')
-            : null,
-        right: _Fact(label: 'AC', value: vendor.ac ? 'Yes' : 'No'),
-      ),
-      _FactRow(
-        left: vendor.area.isNotEmpty
-            ? _Fact(label: 'Area', value: vendor.area)
-            : null,
-        right: null,
-      ),
-      _FactRow(
-        left: vendor.location.isNotEmpty
-            ? _Fact(label: 'Location', value: vendor.location)
-            : null,
-        right: null,
-      ),
-    ];
+      );
+      rows.add(
+        _FactRow(
+          left: vendor.languages.isNotEmpty
+              ? _Fact(label: 'Languages', value: vendor.languages)
+              : null,
+          right: vendor.education.isNotEmpty
+              ? _Fact(label: 'Education', value: vendor.education)
+              : null,
+        ),
+      );
+      rows.add(
+        _FactRow(
+          left: vendor.state.isNotEmpty
+              ? _Fact(label: 'State', value: vendor.state)
+              : null,
+          right: vendor.area.isNotEmpty
+              ? _Fact(label: 'Area', value: vendor.area)
+              : null,
+        ),
+      );
+      rows.add(
+        _FactRow(
+          left: null,
+          right: vendor.proofUrl.isNotEmpty
+              ? const _Fact(label: 'Proof', value: 'Verified')
+              : null,
+        ),
+      );
+    } else if (!hidePricing) {
+      rows.add(
+        _FactRow(
+          left: _Fact(label: 'Price/hr', value: _formatCurrency(vendor.price)),
+          right: vendor.capacity > 0
+              ? _Fact(label: 'Seating', value: '${vendor.capacity}')
+              : null,
+        ),
+      );
+      rows.add(
+        _FactRow(
+          left: vendor.parkingCapacity > 0
+              ? _Fact(label: 'Parking', value: '${vendor.parkingCapacity}')
+              : null,
+          right: _Fact(label: 'AC', value: vendor.ac ? 'Yes' : 'No'),
+        ),
+      );
+    } else if (isDecoration && vendor.decorationPackages.isNotEmpty) {
+      rows.add(
+        _FactRow(
+          left: _Fact(
+            label: 'Packages',
+            value: '${vendor.decorationPackages.length}',
+          ),
+        ),
+      );
+    }
+
+    if (isCatering && vendor.menuItems.isNotEmpty) {
+      rows.add(
+        _FactRow(
+          left: _Fact(
+            label: 'Menu items',
+            value: '${vendor.menuItems.length} items',
+          ),
+        ),
+      );
+    }
+
+    if (!isHumanResource) {
+      rows.add(
+        _FactRow(
+          left: vendor.area.isNotEmpty
+              ? _Fact(label: 'Area', value: vendor.area)
+              : null,
+        ),
+      );
+      rows.add(
+        _FactRow(
+          left: vendor.location.isNotEmpty
+              ? _Fact(label: 'Location', value: vendor.location)
+              : null,
+        ),
+      );
+    }
 
     final children = <Widget>[];
     for (final row in rows) {
@@ -588,10 +729,7 @@ class _FactRowWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: _FactCell(
-            fact: row.left,
-            alignment: Alignment.centerLeft,
-          ),
+          child: _FactCell(fact: row.left, alignment: Alignment.centerLeft),
         ),
         if (row.left != null && row.right != null)
           const Padding(
@@ -599,10 +737,7 @@ class _FactRowWidget extends StatelessWidget {
             child: Text('|', style: TextStyle(color: Colors.black26)),
           ),
         Expanded(
-          child: _FactCell(
-            fact: row.right,
-            alignment: Alignment.centerRight,
-          ),
+          child: _FactCell(fact: row.right, alignment: Alignment.centerRight),
         ),
       ],
     );
@@ -656,9 +791,15 @@ String _formatEventDate(DateTime date) =>
     '${date.day}/${date.month}/${date.year}';
 
 class _BookingSelection {
-  const _BookingSelection({required this.slots});
+  const _BookingSelection({
+    required this.slots,
+    this.deliveryAddress,
+    this.deliveryRequired = false,
+  });
 
   final List<_BookingSlot> slots;
+  final String? deliveryAddress;
+  final bool deliveryRequired;
 
   int get count => slots.length;
   int get hoursPerSlot => slots.isEmpty ? 0 : slots.first.hours;
@@ -677,9 +818,15 @@ class _BookingSlot {
 }
 
 class _BookingSheet extends StatefulWidget {
-  const _BookingSheet({required this.vendor});
+  const _BookingSheet({
+    required this.vendor,
+    this.isCateringProposal = false,
+    this.proposal,
+  });
 
   final Vendor vendor;
+  final bool isCateringProposal;
+  final CateringProposalInput? proposal;
 
   @override
   State<_BookingSheet> createState() => _BookingSheetState();
@@ -690,6 +837,9 @@ class _BookingSheetState extends State<_BookingSheet> {
   final Set<DateTime> _selectedDates = <DateTime>{};
   late TimeOfDay _startTime;
   late TimeOfDay _endTime;
+  final TextEditingController _deliveryAddressController =
+      TextEditingController();
+  bool _deliveryRequired = true;
 
   @override
   void initState() {
@@ -704,6 +854,12 @@ class _BookingSheetState extends State<_BookingSheet> {
     _endTime = const TimeOfDay(hour: 11, minute: 0);
   }
 
+  @override
+  void dispose() {
+    _deliveryAddressController.dispose();
+    super.dispose();
+  }
+
   int get _selectedHours {
     final startMinutes = _minutesOf(_startTime);
     final endMinutes = _minutesOf(_endTime);
@@ -715,17 +871,13 @@ class _BookingSheetState extends State<_BookingSheet> {
   }
 
   List<DateTime> get _sortedDates {
-    final dates = _selectedDates.toList()
-      ..sort((a, b) => a.compareTo(b));
+    final dates = _selectedDates.toList()..sort((a, b) => a.compareTo(b));
     return dates;
   }
 
   String _formatTime(TimeOfDay time) {
     final localizations = MaterialLocalizations.of(context);
-    return localizations.formatTimeOfDay(
-      time,
-      alwaysUse24HourFormat: false,
-    );
+    return localizations.formatTimeOfDay(time, alwaysUse24HourFormat: false);
   }
 
   String _formatDate(DateTime date) {
@@ -733,13 +885,7 @@ class _BookingSheetState extends State<_BookingSheet> {
   }
 
   DateTime _merge(DateTime date, TimeOfDay time) {
-    return DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
   }
 
   Future<void> _pickDate() async {
@@ -755,11 +901,7 @@ class _BookingSheetState extends State<_BookingSheet> {
     if (_selectedDates.contains(normalized)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${_formatDate(normalized)} already selected.',
-          ),
-        ),
+        SnackBar(content: Text('${_formatDate(normalized)} already selected.')),
       );
       return;
     }
@@ -786,11 +928,17 @@ class _BookingSheetState extends State<_BookingSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isCatering = widget.isCateringProposal;
+    final proposalMenu = widget.proposal?.menu ?? const <ProposalMenuItem>[];
+    final proposalGuestCount = widget.proposal?.guestCount;
     final hours = _selectedHours <= 0 ? 1 : _selectedHours;
     final selectionCount = _selectedDates.length;
-    final perDateTotal = widget.vendor.price * hours;
-    final overallTotal =
-        selectionCount == 0 ? 0.0 : perDateTotal * selectionCount;
+    final perDateTotal = isCatering ? 0.0 : widget.vendor.price * hours;
+    final overallTotal = isCatering
+        ? 0.0
+        : selectionCount == 0
+        ? 0.0
+        : perDateTotal * selectionCount;
     final durationLabel = '$hours ${hours == 1 ? 'hour' : 'hours'}';
     final timeLabel = '${_formatTime(_startTime)} - ${_formatTime(_endTime)}';
     final datesSelectedLabel = selectionCount == 0
@@ -798,6 +946,20 @@ class _BookingSheetState extends State<_BookingSheet> {
         : '$selectionCount date${selectionCount == 1 ? '' : 's'} selected';
     final canConfirm =
         selectionCount > 0 && _isEndAfterStart(_endTime, _startTime);
+    final confirmLabel = isCatering ? 'Send proposal' : 'Confirm booking';
+    final proposalChips = proposalMenu
+        .map(
+          (item) => Chip(
+            avatar: Icon(
+              Icons.circle,
+              size: 10,
+              color: item.isVeg ? Colors.green : Colors.redAccent,
+            ),
+            label: Text(item.name),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        )
+        .toList(growable: false);
 
     return SafeArea(
       child: Padding(
@@ -822,10 +984,9 @@ class _BookingSheetState extends State<_BookingSheet> {
                 ),
               ],
             ),
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
@@ -833,7 +994,9 @@ class _BookingSheetState extends State<_BookingSheet> {
                     children: [
                       Expanded(
                         child: Text(
-                          'Book ${widget.vendor.name}',
+                          isCatering
+                              ? 'Send proposal to ${widget.vendor.name}'
+                              : 'Book ${widget.vendor.name}',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -849,6 +1012,28 @@ class _BookingSheetState extends State<_BookingSheet> {
                     ],
                   ),
                   const SizedBox(height: 8),
+                  if (isCatering && proposalChips.isNotEmpty) ...[
+                    const Text(
+                      'Selected dishes',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: _bookingChipText,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(spacing: 8, runSpacing: 8, children: proposalChips),
+                    if (proposalGuestCount != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Guests: $proposalGuestCount',
+                        style: const TextStyle(
+                          color: _bookingMutedText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                  ],
                   const Text(
                     'Select event dates',
                     style: TextStyle(
@@ -884,7 +1069,11 @@ class _BookingSheetState extends State<_BookingSheet> {
                           onDeleted: () => _removeDate(date),
                         ),
                       ActionChip(
-                        avatar: const Icon(Icons.add, size: 18, color: _bookingChipText),
+                        avatar: const Icon(
+                          Icons.add,
+                          size: 18,
+                          color: _bookingChipText,
+                        ),
                         label: const Text(
                           'Add date',
                           style: TextStyle(
@@ -917,129 +1106,215 @@ class _BookingSheetState extends State<_BookingSheet> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _TimeField(
-                          label: 'Start time',
-                          value: _formatTime(_startTime),
-                          onTap: () async {
-                            final picked = await showTimePicker(
-                              context: context,
-                              initialTime: _startTime,
-                              helpText: 'Select start time',
-                              initialEntryMode: TimePickerEntryMode.dial,
-                              builder: (context, child) => MediaQuery(
-                                data: MediaQuery.of(context)
-                                    .copyWith(alwaysUse24HourFormat: true),
-                                child: child ?? const SizedBox.shrink(),
-                              ),
-                            );
-                            if (picked == null) return;
-                            final normalized = picked;
-                            setState(() {
-                              _startTime = normalized;
-                              if (!_isEndAfterStart(_endTime, _startTime)) {
-                                int nextMinutes = _minutesOf(_startTime) + 60;
-                                if (nextMinutes >= 24 * 60) {
-                                  nextMinutes = (24 * 60) - 1;
+                  if (isCatering) ...[
+                    _TimeField(
+                      label: 'Delivery time',
+                      value: _formatTime(_startTime),
+                      onTap: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: _startTime,
+                          helpText: 'Select delivery time',
+                          initialEntryMode: TimePickerEntryMode.dial,
+                          builder: (context, child) => MediaQuery(
+                            data: MediaQuery.of(
+                              context,
+                            ).copyWith(alwaysUse24HourFormat: true),
+                            child: child ?? const SizedBox.shrink(),
+                          ),
+                        );
+                        if (picked == null) return;
+                        setState(() {
+                          _startTime = picked;
+                          final nextMinutes = (_minutesOf(_startTime) + 60)
+                              .clamp(0, (24 * 60) - 1);
+                          _endTime = _timeFromMinutes(nextMinutes);
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Catering delivery'),
+                      subtitle: const Text(
+                        'Toggle off if you plan to pick up the order.',
+                      ),
+                      value: _deliveryRequired,
+                      onChanged: (value) =>
+                          setState(() => _deliveryRequired = value),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _deliveryAddressController,
+                      enabled: _deliveryRequired,
+                      maxLines: 2,
+                      keyboardType: TextInputType.streetAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Delivery address',
+                        hintText: 'Where should the food be delivered?',
+                      ),
+                    ),
+                  ] else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _TimeField(
+                            label: 'Start time',
+                            value: _formatTime(_startTime),
+                            onTap: () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: _startTime,
+                                helpText: 'Select start time',
+                                initialEntryMode: TimePickerEntryMode.dial,
+                                builder: (context, child) => MediaQuery(
+                                  data: MediaQuery.of(
+                                    context,
+                                  ).copyWith(alwaysUse24HourFormat: true),
+                                  child: child ?? const SizedBox.shrink(),
+                                ),
+                              );
+                              if (picked == null) return;
+                              final normalized = picked;
+                              setState(() {
+                                _startTime = normalized;
+                                if (!_isEndAfterStart(_endTime, _startTime)) {
+                                  int nextMinutes = _minutesOf(_startTime) + 60;
+                                  if (nextMinutes >= 24 * 60) {
+                                    nextMinutes = (24 * 60) - 1;
+                                  }
+                                  _endTime = _timeFromMinutes(nextMinutes);
                                 }
-                                _endTime = _timeFromMinutes(nextMinutes);
-                              }
-                            });
-                          },
+                              });
+                            },
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _TimeField(
-                          label: 'End time',
-                          value: _formatTime(_endTime),
-                          onTap: () async {
-                            final picked = await showTimePicker(
-                              context: context,
-                              initialTime: _endTime,
-                              helpText: 'Select end time',
-                              initialEntryMode: TimePickerEntryMode.dial,
-                              builder: (context, child) => MediaQuery(
-                                data: MediaQuery.of(context)
-                                    .copyWith(alwaysUse24HourFormat: true),
-                                child: child ?? const SizedBox.shrink(),
-                              ),
-                            );
-                            if (picked == null) return;
-                            final normalized = picked;
-                            if (!_isEndAfterStart(normalized, _startTime)) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text('End time must be after start time.'),
-                                  ),
-                                );
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _TimeField(
+                            label: 'End time',
+                            value: _formatTime(_endTime),
+                            onTap: () async {
+                              final picked = await showTimePicker(
+                                context: context,
+                                initialTime: _endTime,
+                                helpText: 'Select end time',
+                                initialEntryMode: TimePickerEntryMode.dial,
+                                builder: (context, child) => MediaQuery(
+                                  data: MediaQuery.of(
+                                    context,
+                                  ).copyWith(alwaysUse24HourFormat: true),
+                                  child: child ?? const SizedBox.shrink(),
+                                ),
+                              );
+                              if (picked == null) return;
+                              final normalized = picked;
+                              if (!_isEndAfterStart(normalized, _startTime)) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'End time must be after start time.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return;
                               }
-                              return;
-                            }
-                            setState(() => _endTime = normalized);
-                          },
+                              setState(() => _endTime = normalized);
+                            },
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                   const SizedBox(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Time window',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: _bookingChipText,
-                        ),
-                      ),
-                      Text(
-                        timeLabel,
-                        style: const TextStyle(color: _bookingMutedText),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Estimated total',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: _bookingChipText,
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            _formatCurrency(overallTotal),
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: _vendorPrimaryText,
-                            ),
+                  if (isCatering) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Delivery time',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _bookingChipText,
                           ),
-                          Text(
-                            selectionCount <= 1
-                                ? 'for $durationLabel'
-                                : '$selectionCount dates x ${_formatCurrency(perDateTotal)} each',
-                            style: const TextStyle(
-                              color: _bookingMutedText,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                        ),
+                        Text(
+                          _formatTime(_startTime),
+                          style: const TextStyle(color: _bookingMutedText),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _bookingBorderColor),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                      child: const Text(
+                        'We will notify you once the vendor reviews your menu and shares a quote.',
+                        style: TextStyle(color: _bookingMutedText),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ] else ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Time window',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _bookingChipText,
+                          ),
+                        ),
+                        Text(
+                          timeLabel,
+                          style: const TextStyle(color: _bookingMutedText),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Estimated total',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _bookingChipText,
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              _formatCurrency(overallTotal),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: _vendorPrimaryText,
+                              ),
+                            ),
+                            Text(
+                              selectionCount <= 1
+                                  ? 'for $durationLabel'
+                                  : '$selectionCount dates x ${_formatCurrency(perDateTotal)} each',
+                              style: const TextStyle(
+                                color: _bookingMutedText,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
@@ -1055,6 +1330,21 @@ class _BookingSheetState extends State<_BookingSheet> {
                       ),
                       onPressed: canConfirm
                           ? () {
+                              if (isCatering) {
+                                final trimmedAddress =
+                                    _deliveryAddressController.text.trim();
+                                if (_deliveryRequired &&
+                                    trimmedAddress.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Please provide a delivery address or turn off delivery.',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                              }
                               final slots = _sortedDates
                                   .map(
                                     (date) => _BookingSlot(
@@ -1063,12 +1353,22 @@ class _BookingSheetState extends State<_BookingSheet> {
                                     ),
                                   )
                                   .toList();
+                              final address = _deliveryAddressController.text
+                                  .trim();
                               Navigator.of(context).maybePop(
-                                _BookingSelection(slots: slots),
+                                _BookingSelection(
+                                  slots: slots,
+                                  deliveryAddress: isCatering
+                                      ? (_deliveryRequired ? address : '')
+                                      : null,
+                                  deliveryRequired: isCatering
+                                      ? _deliveryRequired
+                                      : false,
+                                ),
                               );
                             }
                           : null,
-                      child: const Text('Confirm booking'),
+                      child: Text(confirmLabel),
                     ),
                   ),
                 ],
@@ -1232,6 +1532,8 @@ class VendorDetailPage extends StatefulWidget {
 class _VendorDetailPageState extends State<VendorDetailPage> {
   late final PageController _galleryController;
   int _currentImageIndex = 0;
+  final Set<int> _selectedMenuItems = <int>{};
+  final TextEditingController _guestCountController = TextEditingController();
 
   Vendor get vendor => widget.vendor;
 
@@ -1239,11 +1541,15 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
   void initState() {
     super.initState();
     _galleryController = PageController();
+    _guestCountController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _galleryController.dispose();
+    _guestCountController.dispose();
     super.dispose();
   }
 
@@ -1268,6 +1574,11 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
           _buildRatingCard(),
           const SizedBox(height: 20),
           _buildFactsCard(),
+          if (_isCateringVendor(vendor) && vendor.menuItems.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: _buildMenuCard(),
+            ),
           if (vendor.occasions.isNotEmpty || vendor.moreDetails.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 20),
@@ -1283,22 +1594,39 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        child: ElevatedButton.icon(
-          onPressed: () => startVendorBookingFlow(
-            context: context,
-            vendor: vendor,
-            bookingRepository: widget.bookingRepository,
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
-            ),
-          ),
-          icon: const Icon(Icons.event_available_outlined),
-          label: const Text('Book Now'),
+        child: Builder(
+          builder: (context) {
+            final isCatering = _isCateringVendor(vendor);
+            final guestCount = _guestCount();
+            final hasMenu = _selectedMenuItems.isNotEmpty;
+            final canSendProposal = hasMenu && guestCount != null;
+            final onPressed = isCatering
+                ? (canSendProposal ? _handleSendProposal : null)
+                : () => startVendorBookingFlow(
+                    context: context,
+                    vendor: vendor,
+                    bookingRepository: widget.bookingRepository,
+                  );
+            return ElevatedButton.icon(
+              onPressed: onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.black12,
+                disabledForegroundColor: Colors.white70,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+              ),
+              icon: Icon(
+                isCatering
+                    ? Icons.send_outlined
+                    : Icons.event_available_outlined,
+              ),
+              label: Text(isCatering ? 'Send proposal' : 'Book Now'),
+            );
+          },
         ),
       ),
     );
@@ -1448,27 +1776,7 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
             ),
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              if (vendor.area.isNotEmpty)
-                _InfoChip(
-                  icon: Icons.map_outlined,
-                  label: vendor.area,
-                ),
-              if (vendor.pincode.isNotEmpty)
-                _InfoChip(
-                  icon: Icons.pin_drop_outlined,
-                  label: 'Pincode ${vendor.pincode}',
-                ),
-              if (vendor.location.isNotEmpty)
-                _InfoChip(
-                  icon: Icons.location_city_outlined,
-                  label: vendor.location,
-                ),
-            ],
-          ),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -1476,10 +1784,28 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
 
   Widget _buildRatingCard() {
     return StreamBuilder<List<Booking>>(
-      stream:
-          widget.bookingRepository.streamVendorBookings(vendor.ownerUid),
+      stream: widget.bookingRepository.streamVendorBookings(vendor.ownerUid),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
+          final error = snapshot.error;
+          if (error is FirebaseException && error.code == 'permission-denied') {
+            return const _InfoCard(
+              child: ListTile(
+                leading: Icon(Icons.star_border, color: Colors.black54),
+                title: Text(
+                  'Ratings unavailable',
+                  style: TextStyle(
+                    color: _vendorPrimaryText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  'This vendor has chosen to keep ratings private.',
+                  style: TextStyle(color: _detailMutedText),
+                ),
+              ),
+            );
+          }
           return _InfoCard(
             child: Row(
               children: [
@@ -1537,7 +1863,10 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
           );
         }
 
-        final total = ratings.fold<int>(0, (sum, booking) => sum + booking.rating!);
+        final total = ratings.fold<int>(
+          0,
+          (accumulator, booking) => accumulator + booking.rating!,
+        );
         final average = total / ratings.length;
 
         return _InfoCard(
@@ -1576,6 +1905,156 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
           ),
           const SizedBox(height: 12),
           _VendorFacts(vendor: vendor),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleSendProposal() async {
+    final menu = _selectedProposalItems();
+    if (menu.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select at least one menu item.')),
+      );
+      return;
+    }
+    final guestCount = _guestCount();
+    if (guestCount == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid guest count.')),
+      );
+      return;
+    }
+    await startVendorBookingFlow(
+      context: context,
+      vendor: vendor,
+      bookingRepository: widget.bookingRepository,
+      cateringProposal: CateringProposalInput(
+        menu: menu,
+        guestCount: guestCount,
+      ),
+    );
+  }
+
+  int? _guestCount() {
+    final raw = _guestCountController.text.trim();
+    if (raw.isEmpty) return null;
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
+  }
+
+  List<ProposalMenuItem> _selectedProposalItems() {
+    if (_selectedMenuItems.isEmpty) return const <ProposalMenuItem>[];
+    return _selectedMenuItems
+        .map((index) => vendor.menuItems[index])
+        .map((item) => ProposalMenuItem(name: item.name, isVeg: item.isVeg))
+        .toList(growable: false);
+  }
+
+  Widget _buildMenuCard() {
+    final menuItems = vendor.menuItems;
+    final chips = <Widget>[];
+    for (var i = 0; i < menuItems.length; i++) {
+      final item = menuItems[i];
+      final isSelected = _selectedMenuItems.contains(i);
+      final accent = item.isVeg ? Colors.green : Colors.redAccent;
+      chips.add(
+        FilterChip(
+          showCheckmark: false,
+          avatar: Icon(Icons.circle, color: accent, size: 12),
+          label: Text(item.name),
+          labelStyle: TextStyle(
+            color: _vendorPrimaryText,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          ),
+          selected: isSelected,
+          onSelected: (selected) {
+            setState(() {
+              if (selected) {
+                _selectedMenuItems.add(i);
+              } else {
+                _selectedMenuItems.remove(i);
+              }
+            });
+          },
+          selectedColor: accent.withValues(alpha: 0.18),
+          backgroundColor: Colors.grey.shade100,
+          side: BorderSide(color: isSelected ? accent : Colors.transparent),
+          pressElevation: 0,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      );
+    }
+
+    final selectedIndices = _selectedMenuItems.toList()..sort();
+    final selectedChips = selectedIndices.map((index) {
+      final item = menuItems[index];
+      final accent = item.isVeg ? Colors.green : Colors.redAccent;
+      return InputChip(
+        avatar: Icon(Icons.circle, size: 12, color: accent),
+        label: Text(item.name),
+        onDeleted: () => setState(() => _selectedMenuItems.remove(index)),
+        deleteIconColor: Colors.black54,
+        backgroundColor: Colors.white,
+        side: BorderSide(color: accent.withValues(alpha: 0.4)),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      );
+    }).toList();
+
+    return _InfoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Menu highlights',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: _vendorPrimaryText,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(spacing: 10, runSpacing: 10, children: chips),
+          if (selectedChips.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Your menu (${selectedChips.length} item${selectedChips.length == 1 ? '' : 's'})',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: _vendorPrimaryText,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, runSpacing: 8, children: selectedChips),
+            const SizedBox(height: 8),
+            const Text(
+              'Tap chips to add or remove dishes before you book this vendor.',
+              style: TextStyle(fontSize: 12, color: _detailMutedText),
+            ),
+          ],
+          const SizedBox(height: 18),
+          TextField(
+            controller: _guestCountController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              labelText: 'Guest count',
+              hintText: 'How many guests are you hosting?',
+              helperText: 'Vendors use this to estimate pricing.',
+              helperStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+          if (_guestCountController.text.isNotEmpty && _guestCount() == null)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                'Enter a valid number greater than zero.',
+                style: TextStyle(color: Colors.redAccent, fontSize: 12),
+              ),
+            ),
         ],
       ),
     );
@@ -1648,42 +2127,7 @@ class _InfoCard extends StatelessWidget {
       elevation: 3,
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: child,
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: _detailChipColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: _detailChipText),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: _detailChipText,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+      child: Padding(padding: const EdgeInsets.all(18), child: child),
     );
   }
 }

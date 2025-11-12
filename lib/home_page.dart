@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
@@ -16,6 +17,11 @@ import 'vendor_edit_sheet.dart';
 import 'vendor_list_page.dart';
 import 'payment/razorpay_keys.dart';
 import 'user_navigation.dart';
+import 'utils/dialog_utils.dart';
+import 'utils/fee_utils.dart';
+
+const Color _bookingAlertPrimary = Color(0xFF3C22C9);
+const Color _bookingAlertBackground = Color(0xFFF7F2FF);
 
 class UserHomePage extends StatefulWidget {
   final User user;
@@ -39,6 +45,8 @@ class _UserHomePageState extends State<UserHomePage> {
   );
   Timer? _carouselTimer;
   int _carouselItemCount = 0;
+  final Set<String> _userAlertedBookingIds = <String>{};
+  bool _userAlertDialogOpen = false;
 
   String _searchQuery = '';
   final ValueNotifier<int> _carouselIndexNotifier = ValueNotifier<int>(0);
@@ -261,6 +269,7 @@ class _UserHomePageState extends State<UserHomePage> {
                 final bookings = bookingSnapshot.data ?? const <Booking>[];
                 final bookingsLoading =
                     bookingSnapshot.connectionState == ConnectionState.waiting;
+                _maybeShowUserBookingAlert(bookings);
 
                 return IndexedStack(
                   index: _currentIndex,
@@ -319,6 +328,57 @@ class _UserHomePageState extends State<UserHomePage> {
     );
   }
 
+  void _maybeShowUserBookingAlert(List<Booking> bookings) {
+    if (_userAlertDialogOpen || bookings.isEmpty) return;
+    final actionable = bookings.where(_isUserBookingActionable).toList();
+    if (actionable.isEmpty) return;
+    final pending = actionable.firstWhere(
+      (booking) => !_userAlertedBookingIds.contains(booking.id),
+      orElse: () => actionable.first,
+    );
+    if (_userAlertedBookingIds.contains(pending.id)) return;
+    _userAlertedBookingIds.add(pending.id);
+    _userAlertDialogOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        _userAlertDialogOpen = false;
+        return;
+      }
+      _showBookingAlertCard(
+        context: context,
+        heading: 'Booking update',
+        name: pending.vendorName,
+        message: _userBookingAlertMessage(pending),
+        onView: () => navigateUserTab(context, 1),
+      ).whenComplete(() {
+        _userAlertDialogOpen = false;
+      });
+    });
+  }
+
+  bool _isUserBookingActionable(Booking booking) {
+    if (booking.status == BookingStatus.accepted) return true;
+    if (booking.proposalStatus == ProposalStatus.vendorQuoted) return true;
+    if (booking.proposalStatus == ProposalStatus.vendorAccepted) return true;
+    return false;
+  }
+
+  String _userBookingAlertMessage(Booking booking) {
+    final dateLabel = _formatBookingDate(booking.eventDate);
+    if (booking.proposalStatus == ProposalStatus.vendorQuoted) {
+      final amount = booking.vendorQuoteAmount ?? booking.totalAmount;
+      final amountLabel = amount > 0 ? ' (${_formatCurrency(amount)})' : '';
+      return 'New quote for $dateLabel$amountLabel. Review and respond.';
+    }
+    if (booking.proposalStatus == ProposalStatus.vendorAccepted) {
+      return 'Proposal accepted for $dateLabel. Complete payment to confirm.';
+    }
+    if (booking.status == BookingStatus.accepted) {
+      return 'Booking approved for $dateLabel. Complete payment to secure your slot.';
+    }
+    return 'Update available for $dateLabel.';
+  }
+
   Widget _buildProfileTab(User user, String initials) {
     final displayName = user.displayName ?? user.email ?? 'Guest';
     final email = user.email ?? 'Not available';
@@ -329,16 +389,16 @@ class _UserHomePageState extends State<UserHomePage> {
       color: _backgroundCream,
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Card(
-                color: _cardSurface,
-                elevation: 6,
-                shadowColor: Colors.black.withValues(alpha: 0.08),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              color: _cardSurface,
+              elevation: 6,
+              shadowColor: Colors.black.withValues(alpha: 0.08),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -388,8 +448,10 @@ class _UserHomePageState extends State<UserHomePage> {
                     const SizedBox(height: 24),
                     const Text(
                       'Account details',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     _ProfileDetailRow(
@@ -461,10 +523,7 @@ class _UserHomePageState extends State<UserHomePage> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
-            const Text(
-              aboutBody,
-              style: TextStyle(height: 1.4),
-            ),
+            const Text(aboutBody, style: TextStyle(height: 1.4)),
             const SizedBox(height: 16),
             const Text(
               'Key reasons to choose BME Now:',
@@ -477,12 +536,12 @@ class _UserHomePageState extends State<UserHomePage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('- ', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const Text(
+                      '- ',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                     Expanded(
-                      child: Text(
-                        item,
-                        style: const TextStyle(height: 1.3),
-                      ),
+                      child: Text(item, style: const TextStyle(height: 1.3)),
                     ),
                   ],
                 ),
@@ -554,6 +613,16 @@ class _UserHomePageState extends State<UserHomePage> {
               onChanged: (value) => setState(() => _searchQuery = value.trim()),
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Clear search',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      ),
                 hintText: 'Search categories (e.g. Catering, Decoration)',
                 filled: true,
                 fillColor: Colors.white,
@@ -562,59 +631,6 @@ class _UserHomePageState extends State<UserHomePage> {
                   borderSide: BorderSide.none,
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                const suggestions = [
-                  'Decoration',
-                  'Catering',
-                  'Photography',
-                  'Music',
-                ];
-                const spacing = 12.0;
-                final maxWidth = constraints.maxWidth;
-                final columns = maxWidth > 640
-                    ? 4
-                    : maxWidth > 480
-                        ? 3
-                        : 2;
-                final itemWidth =
-                    (maxWidth - (columns - 1) * spacing) / columns;
-
-                return Wrap(
-                  spacing: spacing,
-                  runSpacing: spacing,
-                  children: [
-                    for (final suggestion in suggestions)
-                      SizedBox(
-                        width: itemWidth,
-                        child: ActionChip(
-                          backgroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            side: BorderSide(
-                              color: Colors.black.withValues(alpha: 0.1),
-                            ),
-                          ),
-                          label: Center(
-                            child: Text(
-                              suggestion,
-                              style: const TextStyle(
-                                color: Colors.black87,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          onPressed: () {
-                            _searchController.text = suggestion;
-                            setState(() => _searchQuery = suggestion);
-                          },
-                        ),
-                      ),
-                  ],
-                );
-              },
             ),
           ],
         ),
@@ -664,134 +680,131 @@ class _UserHomePageState extends State<UserHomePage> {
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
               : categories.isEmpty
-                  ? const Center(child: Text('No categories available yet.'))
-                  : Column(
-                      children: [
-                        Expanded(
-                          child: Listener(
-                            onPointerDown: (_) => _stopCarouselAutoPlay(),
-                            onPointerUp: (_) => _startCarouselAutoPlay(),
-                            onPointerCancel: (_) => _startCarouselAutoPlay(),
-                            child: PageView.builder(
-                              controller: _carouselController,
-                              onPageChanged: (index) =>
-                                  _carouselIndexNotifier.value = index,
-                              itemBuilder: (context, index) {
-                                final displayIndex =
-                                    categories.isEmpty ? 0 : index % categories.length;
-                                final category = categories[displayIndex];
-                                final slideAsset =
-                                    _assetForCategory(category);
+              ? const Center(child: Text('No categories available yet.'))
+              : Column(
+                  children: [
+                    Expanded(
+                      child: Listener(
+                        onPointerDown: (_) => _stopCarouselAutoPlay(),
+                        onPointerUp: (_) => _startCarouselAutoPlay(),
+                        onPointerCancel: (_) => _startCarouselAutoPlay(),
+                        child: PageView.builder(
+                          controller: _carouselController,
+                          onPageChanged: (index) =>
+                              _carouselIndexNotifier.value = index,
+                          itemBuilder: (context, index) {
+                            final displayIndex = categories.isEmpty
+                                ? 0
+                                : index % categories.length;
+                            final category = categories[displayIndex];
+                            final slideAsset = _assetForCategory(category);
 
-                                Widget buildBackground() {
-                                  if (_isValidUrl(category.imageUrl)) {
-                                    return Image.network(
-                                      category.imageUrl,
-                                      fit: BoxFit.cover,
-                                    );
-                                  }
-                                  if (slideAsset != null) {
-                                    return Image.asset(
-                                      slideAsset,
-                                      fit: BoxFit.cover,
-                                    );
-                                  }
-                                  return Container(color: Colors.grey.shade900);
-                                }
+                            Widget buildBackground() {
+                              if (_isValidUrl(category.imageUrl)) {
+                                return Image.network(
+                                  category.imageUrl,
+                                  fit: BoxFit.cover,
+                                );
+                              }
+                              if (slideAsset != null) {
+                                return Image.asset(
+                                  slideAsset,
+                                  fit: BoxFit.cover,
+                                );
+                              }
+                              return Container(color: Colors.grey.shade900);
+                            }
 
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  child: GestureDetector(
-                                    onTap: () => _openCategory(category),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(18),
-                                      child: Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          Positioned.fill(child: buildBackground()),
-                                          Container(
-                                            decoration: const BoxDecoration(
-                                              gradient: LinearGradient(
-                                                begin: Alignment.bottomCenter,
-                                                end: Alignment.topCenter,
-                                                colors: [
-                                                  Color.fromARGB(220, 0, 0, 0),
-                                                  Color.fromARGB(60, 0, 0, 0),
-                                                ],
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: GestureDetector(
+                                onTap: () => _openCategory(category),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Positioned.fill(child: buildBackground()),
+                                      Container(
+                                        decoration: const BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.bottomCenter,
+                                            end: Alignment.topCenter,
+                                            colors: [
+                                              Color.fromARGB(220, 0, 0, 0),
+                                              Color.fromARGB(60, 0, 0, 0),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              category.name,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.w700,
                                               ),
                                             ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(16),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.end,
-                                              children: [
-                                                Text(
-                                                  category.name,
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 20,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                const Text(
-                                                  'Tap to explore vendors',
-                                                  style: TextStyle(
-                                                    color: Colors.white70,
-                                                  ),
-                                                ),
-                                              ],
+                                            const SizedBox(height: 4),
+                                            const Text(
+                                              'Tap to explore vendors',
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                       ValueListenableBuilder<int>(
-                          valueListenable: _carouselIndexNotifier,
-                          builder: (context, currentIndex, _) {
-                            if (categories.isEmpty) {
-                              return const SizedBox.shrink();
-                            }
-                            final activeIndex =
-                                currentIndex % categories.length;
-                            return Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: List.generate(
-                                categories.length,
-                                (index) => AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeInOut,
-                                  width: activeIndex == index ? 18 : 8,
-                                  height: 6,
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: activeIndex == index
-                                        ? Colors.indigo
-                                        : Colors.indigo.shade100,
-                                    borderRadius: BorderRadius.circular(12),
+                                    ],
                                   ),
                                 ),
                               ),
                             );
                           },
                         ),
-                      ],
+                      ),
                     ),
+                    const SizedBox(height: 12),
+                    ValueListenableBuilder<int>(
+                      valueListenable: _carouselIndexNotifier,
+                      builder: (context, currentIndex, _) {
+                        if (categories.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        final activeIndex = currentIndex % categories.length;
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(
+                            categories.length,
+                            (index) => AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInOut,
+                              width: activeIndex == index ? 18 : 8,
+                              height: 6,
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              decoration: BoxDecoration(
+                                color: activeIndex == index
+                                    ? Colors.indigo
+                                    : Colors.indigo.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
         ),
       ),
     );
@@ -864,7 +877,7 @@ class _UserHomePageState extends State<UserHomePage> {
         ),
       ),
     );
-}
+  }
 
   Widget _buildCategoryIcon(Category category) {
     final iconAsset = _iconForCategory(category);
@@ -872,10 +885,7 @@ class _UserHomePageState extends State<UserHomePage> {
       return Image.asset(iconAsset, fit: BoxFit.cover);
     }
     if (_isValidUrl(category.imageUrl)) {
-      return Image.network(
-        category.imageUrl,
-        fit: BoxFit.cover,
-      );
+      return Image.network(category.imageUrl, fit: BoxFit.cover);
     }
     final slideAsset = _assetForCategory(category);
     if (slideAsset != null) {
@@ -904,10 +914,7 @@ class _UserHomePageState extends State<UserHomePage> {
                 children: const [
                   Text(
                     'BME Now Promise',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                   SizedBox(height: 12),
                   PromiseBullet(text: 'Verified professional vendors'),
@@ -938,11 +945,7 @@ class _UserHomePageState extends State<UserHomePage> {
                 ],
               ),
               child: const Center(
-                child: Icon(
-                  Icons.verified,
-                  size: 42,
-                  color: Colors.deepPurple,
-                ),
+                child: Icon(Icons.verified, size: 42, color: Colors.deepPurple),
               ),
             ),
           ],
@@ -997,6 +1000,10 @@ class _UserHomePageState extends State<UserHomePage> {
                   final total = _formatCurrency(booking.totalAmount);
                   final timeRange = _formatBookingTimeRange(context, booking);
                   final hours = _hoursForBooking(booking);
+                  final isCatering = booking.isCateringProposal;
+                  final statusWidgets = isCatering
+                      ? _buildUserCateringStatusWidgets(booking)
+                      : _buildStandardUserBookingStatus(booking);
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
@@ -1038,78 +1045,79 @@ class _UserHomePageState extends State<UserHomePage> {
                         Text(
                           'Event date: ${_formatBookingDate(booking.eventDate)}',
                         ),
-                        if (timeRange != null)
+                        if (!isCatering && timeRange != null)
                           Text(
                             'Time: $timeRange ($hours hr${hours == 1 ? '' : 's'})',
                           ),
-                        Text('Estimate: $total'),
-                        const SizedBox(height: 12),
-                        if (booking.status == BookingStatus.pending)
-                          const Text(
-                            'Awaiting vendor confirmation',
-                            style: TextStyle(color: Colors.black54),
-                          )
-                        else if (booking.status == BookingStatus.declined)
-                          const Text(
-                            'Vendor declined this request.',
-                            style: TextStyle(color: Colors.redAccent),
-                          )
-                        else if (booking.status == BookingStatus.accepted) ...[
-                          const Text(
-                            'Vendor approved your request! Secure the slot with payment.',
-                            style: TextStyle(color: Colors.black87),
-                          ),
+                        if (isCatering && booking.proposalMenu.isNotEmpty) ...[
                           const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: ElevatedButton(
-                              onPressed: () => _openPaymentPage(booking),
-                              child: const Text('Pay now'),
-                            ),
-                          ),
-                        ] else if (booking.status == BookingStatus.paid) ...[
-                          if (booking.paymentReference != null)
-                            Text(
-                              'Payment reference: ${booking.paymentReference}',
-                              style: const TextStyle(color: Colors.green),
-                            )
-                          else
-                            const Text(
-                              'Payment completed.',
-                              style: TextStyle(color: Colors.green),
-                            ),
-                          const SizedBox(height: 8),
-                          if (booking.rating == null)
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: OutlinedButton.icon(
-                                onPressed: () => _promptForRating(booking),
-                                icon: const Icon(Icons.star_outline),
-                                label: const Text('Rate experience'),
-                              ),
-                            )
-                          else ...[
-                            Row(
-                              children: [
-                                const Icon(Icons.star, color: Colors.amber),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${booking.rating}/5',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: booking.proposalMenu
+                                .map(
+                                  (item) => Chip(
+                                    avatar: Icon(
+                                      Icons.circle,
+                                      size: 10,
+                                      color: item.isVeg
+                                          ? Colors.green
+                                          : Colors.redAccent,
+                                    ),
+                                    label: Text(item.name),
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
-                                ),
-                              ],
-                            ),
-                            if ((booking.review ?? '').isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                booking.review!,
-                                style: const TextStyle(color: Colors.black54),
-                              ),
-                            ],
-                          ],
+                                )
+                                .toList(),
+                          ),
                         ],
+                        if (isCatering && booking.proposalGuestCount != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              'Guests: ${booking.proposalGuestCount}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        if (isCatering)
+                          Text(
+                            booking.totalAmount > 0
+                                ? 'Current amount: $total'
+                                : 'Quote pending',
+                          ),
+                        if (booking.totalAmount > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: _PayoutBreakdown(
+                              amount: booking.totalAmount,
+                              settlementLabel: 'Estimate amount',
+                              formatCurrency: _formatCurrency,
+                              onInfoTap: () => showFeeBreakdownDialog(
+                                context: context,
+                                breakdown: _calculateFees(booking.totalAmount),
+                                formatCurrency: _formatCurrency,
+                              ),
+                            ),
+                          ),
+                        if (isCatering) ...[
+                          if (booking.proposalDeliveryRequired &&
+                              (booking.proposalDeliveryAddress ?? '')
+                                  .isNotEmpty)
+                            Text(
+                              'Delivery address: ${booking.proposalDeliveryAddress}',
+                            ),
+                          if (!booking.proposalDeliveryRequired)
+                            const Text('Pickup: you will collect the order'),
+                          if (booking.proposalDeliveryTime != null)
+                            Text(
+                              'Delivery time: ${_formatDeliveryDateTime(context, booking.proposalDeliveryTime!)}',
+                            ),
+                        ],
+                        const SizedBox(height: 12),
+                        ...statusWidgets,
                       ],
                     ),
                   );
@@ -1140,6 +1148,360 @@ class _UserHomePageState extends State<UserHomePage> {
         ),
       ],
     );
+  }
+
+  List<Widget> _buildStandardUserBookingStatus(Booking booking) {
+    switch (booking.status) {
+      case BookingStatus.pending:
+        return const [
+          Text(
+            'Awaiting vendor confirmation',
+            style: TextStyle(color: Colors.black54),
+          ),
+        ];
+      case BookingStatus.declined:
+        return const [
+          Text(
+            'Vendor declined this request.',
+            style: TextStyle(color: Colors.redAccent),
+          ),
+        ];
+      case BookingStatus.accepted:
+        return [
+          const Text(
+            'Vendor approved your request! Secure the slot with payment.',
+            style: TextStyle(color: Colors.black87),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: () => _openPaymentPage(booking),
+              child: const Text('Pay now'),
+            ),
+          ),
+        ];
+      case BookingStatus.paid:
+        return _buildPaidUserBookingWidgets(booking);
+    }
+  }
+
+  List<Widget> _buildPaidUserBookingWidgets(Booking booking) {
+    final widgets = <Widget>[];
+    if (booking.paymentReference != null) {
+      widgets.add(
+        Text(
+          'Payment reference: ${booking.paymentReference}',
+          style: const TextStyle(color: Colors.green),
+        ),
+      );
+    } else {
+      widgets.add(
+        const Text('Payment completed.', style: TextStyle(color: Colors.green)),
+      );
+    }
+    widgets.add(const SizedBox(height: 8));
+    if (booking.rating == null) {
+      widgets.add(
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton.icon(
+            onPressed: () => _promptForRating(booking),
+            icon: const Icon(Icons.star_outline),
+            label: const Text('Rate experience'),
+          ),
+        ),
+      );
+    } else {
+      widgets.add(
+        Row(
+          children: [
+            const Icon(Icons.star, color: Colors.amber),
+            const SizedBox(width: 4),
+            Text(
+              '${booking.rating}/5',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      );
+      if ((booking.review ?? '').isNotEmpty) {
+        widgets.add(const SizedBox(height: 4));
+        widgets.add(
+          Text(booking.review!, style: const TextStyle(color: Colors.black54)),
+        );
+      }
+    }
+    return widgets;
+  }
+
+  List<Widget> _buildUserCateringStatusWidgets(Booking booking) {
+    if (booking.status == BookingStatus.paid) {
+      return _buildPaidUserBookingWidgets(booking);
+    }
+    final proposalStatus = booking.proposalStatus;
+    final quote = booking.vendorQuoteAmount ?? booking.totalAmount;
+    final counter = booking.userCounterAmount;
+    final widgets = <Widget>[];
+    bool addedPayButton = false;
+
+    switch (proposalStatus) {
+      case ProposalStatus.vendorQuoted:
+        widgets.add(
+          Text(
+            'Quote received: ${_formatCurrency(quote)}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+        );
+        widgets.add(const SizedBox(height: 8));
+        widgets.add(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              ElevatedButton(
+                onPressed: () => _acceptCateringQuote(booking),
+                child: const Text('Accept quote'),
+              ),
+              OutlinedButton(
+                onPressed: () => _promptCateringCounter(booking),
+                child: const Text('Negotiate'),
+              ),
+            ],
+          ),
+        );
+        break;
+      case ProposalStatus.userCounter:
+        widgets.add(
+          Text(
+            'Counter offer sent: ${_formatCurrency(counter ?? 0)}',
+            style: const TextStyle(color: Colors.black87),
+          ),
+        );
+        widgets.add(
+          const Text(
+            'Waiting for the vendor to respond.',
+            style: TextStyle(color: Colors.black54),
+          ),
+        );
+        break;
+      case ProposalStatus.vendorAccepted:
+        widgets.add(
+          Text(
+            'Vendor accepted your proposal at ${_formatCurrency(booking.totalAmount)}.',
+            style: const TextStyle(color: Colors.black87),
+          ),
+        );
+        widgets.add(const SizedBox(height: 8));
+        widgets.add(
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: () => _openPaymentPage(booking),
+              child: const Text('Pay now'),
+            ),
+          ),
+        );
+        addedPayButton = true;
+        break;
+      case ProposalStatus.vendorDeclined:
+        widgets.add(
+          const Text(
+            'Vendor declined this proposal.',
+            style: TextStyle(color: Colors.redAccent),
+          ),
+        );
+        break;
+      case ProposalStatus.sent:
+      case null:
+        widgets.add(
+          const Text(
+            'Proposal sent. The vendor will review your menu and share a quote.',
+            style: TextStyle(color: Colors.black54),
+          ),
+        );
+        break;
+    }
+
+    if (!addedPayButton && booking.status == BookingStatus.accepted) {
+      widgets.add(
+        const Text(
+          'Vendor approved your proposal. Complete the payment to confirm.',
+          style: TextStyle(color: Colors.black87),
+        ),
+      );
+      widgets.add(const SizedBox(height: 8));
+      widgets.add(
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton(
+            onPressed: () => _openPaymentPage(booking),
+            child: const Text('Pay now'),
+          ),
+        ),
+      );
+    } else if (booking.status == BookingStatus.declined &&
+        proposalStatus != ProposalStatus.vendorDeclined) {
+      widgets.add(
+        const Text(
+          'Vendor declined this request.',
+          style: TextStyle(color: Colors.redAccent),
+        ),
+      );
+    }
+
+    return widgets;
+  }
+
+  Future<void> _acceptCateringQuote(Booking booking) async {
+    try {
+      await _bookingRepository.userAcceptQuote(bookingId: booking.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Quote accepted for ${booking.vendorName}. You can proceed to payment.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to accept quote: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _promptCateringCounter(Booking booking) async {
+    final controller = TextEditingController(
+      text: booking.userCounterAmount?.toStringAsFixed(0) ?? '',
+    );
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<double>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 24,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _bookingAlertBackground,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 30,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Counter offer for ${booking.vendorName}',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: controller,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Enter your offer (Rs)',
+                        ),
+                        validator: (value) {
+                          final parsed = double.tryParse(value ?? '');
+                          if (parsed == null || parsed <= 0) {
+                            return 'Enter a valid amount';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OutlinedButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _bookingAlertPrimary,
+                              side: const BorderSide(
+                                color: _bookingAlertPrimary,
+                              ),
+                              shape: const StadiumBorder(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 22,
+                                vertical: 10,
+                              ),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                          const SizedBox(width: 16),
+                          FilledButton(
+                            onPressed: () {
+                              if (!formKey.currentState!.validate()) return;
+                              final value = double.parse(controller.text);
+                              Navigator.of(dialogContext).pop(value);
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _bookingAlertPrimary,
+                              foregroundColor: Colors.white,
+                              shape: const StadiumBorder(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 26,
+                                vertical: 12,
+                              ),
+                            ),
+                            child: const Text('Send counter'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) return;
+    try {
+      await _bookingRepository.userCounterQuote(
+        bookingId: booking.id,
+        amount: result,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Counter offer sent to the vendor.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to send counter offer: $error')),
+        );
+      }
+    }
   }
 
   Color _bookingStatusColor(BookingStatus status) {
@@ -1178,6 +1540,15 @@ class _UserHomePageState extends State<UserHomePage> {
   String _formatBookingDate(DateTime date) =>
       '${date.day}/${date.month}/${date.year}';
 
+  String _formatDeliveryDateTime(BuildContext context, DateTime value) {
+    final dateLabel = _formatBookingDate(value);
+    final timeLabel = MaterialLocalizations.of(context).formatTimeOfDay(
+      TimeOfDay.fromDateTime(value),
+      alwaysUse24HourFormat: false,
+    );
+    return '$dateLabel at $timeLabel';
+  }
+
   String _formatCurrency(double value) {
     const rupee = '\u20B9';
     if (value == 0) return "${rupee}0";
@@ -1198,8 +1569,7 @@ class _UserHomePageState extends State<UserHomePage> {
   }
 
   Future<void> _promptForRating(Booking booking) async {
-    final commentController =
-        TextEditingController(text: booking.review ?? '');
+    final commentController = TextEditingController(text: booking.review ?? '');
     int tempRating = booking.rating ?? 5;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1305,10 +1675,7 @@ class PromiseBullet extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
-              color: Colors.black87,
-              height: 1.3,
-            ),
+            style: const TextStyle(color: Colors.black87, height: 1.3),
           ),
         ),
       ],
@@ -1333,6 +1700,8 @@ class _VendorHomePageState extends State<VendorHomePage> {
   static const double _annualSubscriptionFee = 500;
   late final Razorpay _razorpay;
   Vendor? _pendingSubscriptionVendor;
+  final Set<String> _vendorAlertedBookingIds = <String>{};
+  bool _vendorAlertDialogOpen = false;
 
   @override
   void initState() {
@@ -1366,6 +1735,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
                 final pendingBookings = bookings
                     .where((booking) => booking.status == BookingStatus.pending)
                     .length;
+                _maybeShowVendorBookingAlert(bookings);
 
                 return Scaffold(
                   backgroundColor: const Color(0xFFF6F7FB),
@@ -1464,6 +1834,56 @@ class _VendorHomePageState extends State<VendorHomePage> {
         );
       },
     );
+  }
+
+  void _maybeShowVendorBookingAlert(List<Booking> bookings) {
+    if (_vendorAlertDialogOpen || bookings.isEmpty) return;
+    final actionable = bookings.where(_isVendorBookingActionable).toList();
+    if (actionable.isEmpty) return;
+    final pending = actionable.firstWhere(
+      (booking) => !_vendorAlertedBookingIds.contains(booking.id),
+      orElse: () => actionable.first,
+    );
+    if (_vendorAlertedBookingIds.contains(pending.id)) return;
+    _vendorAlertedBookingIds.add(pending.id);
+    _vendorAlertDialogOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        _vendorAlertDialogOpen = false;
+        return;
+      }
+      _showBookingAlertCard(
+        context: context,
+        heading: 'Booking update',
+        name: pending.userName.isNotEmpty
+            ? pending.userName
+            : pending.userEmail,
+        message: _vendorBookingAlertMessage(pending),
+        onView: () => setState(() => _tabIndex = 1),
+      ).whenComplete(() {
+        _vendorAlertDialogOpen = false;
+      });
+    });
+  }
+
+  bool _isVendorBookingActionable(Booking booking) {
+    if (booking.status == BookingStatus.pending) return true;
+    if (booking.proposalStatus == ProposalStatus.sent) return true;
+    if (booking.proposalStatus == ProposalStatus.userCounter) return true;
+    return false;
+  }
+
+  String _vendorBookingAlertMessage(Booking booking) {
+    final dateLabel = _formatBookingDate(booking.eventDate);
+    if (booking.proposalStatus == ProposalStatus.userCounter) {
+      final amount = booking.userCounterAmount ?? 0;
+      final amountLabel = amount > 0 ? ' (${_formatCurrency(amount)})' : '';
+      return 'Counter offer for $dateLabel$amountLabel. Review and respond.';
+    }
+    if (booking.proposalStatus == ProposalStatus.sent) {
+      return 'New proposal for $dateLabel. Send your quote.';
+    }
+    return 'Response pending for $dateLabel. Take action to update the customer.';
   }
 
   Future<void> _openVendorSheet({
@@ -1600,6 +2020,26 @@ class _VendorHomePageState extends State<VendorHomePage> {
     return names.any((name) => name.contains('decor'));
   }
 
+  bool _isCateringVendor(Vendor vendor) {
+    final lowerType = vendor.type.toLowerCase();
+    if (lowerType.contains('cater')) return true;
+    final names = <String>{
+      vendor.categoryName.toLowerCase(),
+      ...vendor.categoryNames.map((name) => name.toLowerCase()),
+    };
+    return names.any((name) => name.contains('cater'));
+  }
+
+  bool _isHumanResourceVendor(Vendor vendor) {
+    final lowerType = vendor.type.toLowerCase();
+    if (lowerType.contains('human')) return true;
+    final names = <String>{
+      vendor.categoryName.toLowerCase(),
+      ...vendor.categoryNames.map((name) => name.toLowerCase()),
+    };
+    return names.any((name) => name.contains('human'));
+  }
+
   Widget _buildVendorOverview({
     required Vendor vendor,
     required List<Category> categories,
@@ -1615,14 +2055,15 @@ class _VendorHomePageState extends State<VendorHomePage> {
               booking.status == BookingStatus.paid,
         )
         .length;
-    final ratedBookings =
-        bookings.where((booking) => booking.rating != null).toList();
+    final ratedBookings = bookings
+        .where((booking) => booking.rating != null)
+        .toList();
     final double? averageRating = ratedBookings.isEmpty
         ? null
         : ratedBookings
-                .map((booking) => booking.rating!.toDouble())
-                .reduce((value, element) => value + element) /
-            ratedBookings.length;
+                  .map((booking) => booking.rating!.toDouble())
+                  .reduce((value, element) => value + element) /
+              ratedBookings.length;
     final ratingLabel = averageRating == null
         ? 'N/A'
         : '${averageRating.toStringAsFixed(1)}/5 (${ratedBookings.length})';
@@ -1712,8 +2153,9 @@ class _VendorHomePageState extends State<VendorHomePage> {
                       value: upcoming.toString(),
                     ),
                     _buildVendorStatChip(
-                      icon:
-                          averageRating == null ? Icons.star_border : Icons.star,
+                      icon: averageRating == null
+                          ? Icons.star_border
+                          : Icons.star,
                       label: 'Rating',
                       value: ratingLabel,
                     ),
@@ -1792,6 +2234,10 @@ class _VendorHomePageState extends State<VendorHomePage> {
             final total = _formatCurrency(booking.totalAmount);
             final timeRange = _formatVendorBookingTimeRange(booking);
             final hours = _hoursForVendorBooking(booking);
+            final isCatering = booking.isCateringProposal;
+            final cateringWidgets = isCatering
+                ? _buildVendorCateringStatusWidgets(booking)
+                : const <Widget>[];
 
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -1837,17 +2283,82 @@ class _VendorHomePageState extends State<VendorHomePage> {
                           style: TextStyle(color: statusColor),
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text('Event date: ${_formatBookingDate(booking.eventDate)}'),
-                if (timeRange != null)
-                  Text(
-                    'Time: $timeRange ($hours hr${hours == 1 ? '' : 's'})',
+                    ],
                   ),
-                Text('Estimated total: $total'),
+                  const SizedBox(height: 8),
+                  Text('Event date: ${_formatBookingDate(booking.eventDate)}'),
+                  if (!isCatering && timeRange != null)
+                    Text(
+                      'Time: $timeRange ($hours hr${hours == 1 ? '' : 's'})',
+                    ),
+                  if (isCatering && booking.proposalMenu.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: booking.proposalMenu
+                          .map(
+                            (item) => Chip(
+                              avatar: Icon(
+                                Icons.circle,
+                                size: 10,
+                                color: item.isVeg
+                                    ? Colors.green
+                                    : Colors.redAccent,
+                              ),
+                              label: Text(item.name),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                  if (isCatering && booking.proposalGuestCount != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Guests: ${booking.proposalGuestCount}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  if (isCatering)
+                    Text(
+                      booking.totalAmount > 0
+                          ? 'Current amount: $total'
+                          : 'Awaiting quote',
+                    ),
+                  if (booking.totalAmount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: _PayoutBreakdown(
+                        amount: booking.totalAmount,
+                        settlementLabel: 'Your quote',
+                        formatCurrency: _formatCurrency,
+                        showSubtraction: true,
+                        onInfoTap: () => showFeeBreakdownDialog(
+                          context: context,
+                          breakdown: _calculateFees(booking.totalAmount),
+                          formatCurrency: _formatCurrency,
+                          includeCommission: false,
+                        ),
+                      ),
+                    ),
+                  if (isCatering) ...[
+                    if (booking.proposalDeliveryRequired &&
+                        (booking.proposalDeliveryAddress ?? '').isNotEmpty)
+                      Text(
+                        'Delivery address: ${booking.proposalDeliveryAddress}',
+                      ),
+                    if (!booking.proposalDeliveryRequired)
+                      const Text('Pickup arranged'),
+                    if (booking.proposalDeliveryTime != null)
+                      Text(
+                        'Delivery time: ${_formatDeliveryDateTime(context, booking.proposalDeliveryTime!)}',
+                      ),
+                  ],
                   const SizedBox(height: 12),
-                  if (showActions)
+                  if (!isCatering && showActions)
                     Row(
                       children: [
                         Expanded(
@@ -1872,7 +2383,9 @@ class _VendorHomePageState extends State<VendorHomePage> {
                           ),
                         ),
                       ],
-                    ),
+                    )
+                  else if (isCatering)
+                    ...cateringWidgets,
                 ],
               ),
             );
@@ -2030,8 +2543,8 @@ class _VendorHomePageState extends State<VendorHomePage> {
     final daysRemaining = expiry != null
         ? expiry.difference(DateTime.now()).inDays
         : 0;
-    final isProcessing = _processingSubscription &&
-        _pendingSubscriptionVendor?.id == vendor.id;
+    final isProcessing =
+        _processingSubscription && _pendingSubscriptionVendor?.id == vendor.id;
     final canRenew = !isActive && !isProcessing;
 
     return SingleChildScrollView(
@@ -2114,17 +2627,16 @@ class _VendorHomePageState extends State<VendorHomePage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed:
-                  canRenew ? () => _handleSubscriptionPayment(vendor) : null,
+              onPressed: canRenew
+                  ? () => _handleSubscriptionPayment(vendor)
+                  : null,
               icon: isProcessing
                   ? const SizedBox(
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Icon(
-                      isActive ? Icons.lock : Icons.lock_open,
-                    ),
+                  : Icon(isActive ? Icons.lock : Icons.lock_open),
               label: Text(
                 isActive
                     ? 'Renew for ${_formatCurrency(_annualSubscriptionFee)}'
@@ -2245,6 +2757,15 @@ class _VendorHomePageState extends State<VendorHomePage> {
               packages: vendor.decorationPackages,
               formatCurrency: _formatCurrency,
             ),
+          ] else if (_isCateringVendor(vendor)) ...[
+            const SizedBox(height: 16),
+            _CateringMenuSection(items: vendor.menuItems),
+          ] else if (_isHumanResourceVendor(vendor)) ...[
+            const SizedBox(height: 16),
+            _HumanResourceInfoSection(
+              vendor: vendor,
+              formatCurrency: _formatCurrency,
+            ),
           ] else ...[
             const SizedBox(height: 16),
             Wrap(
@@ -2337,6 +2858,243 @@ class _VendorHomePageState extends State<VendorHomePage> {
         ),
       ],
     );
+  }
+
+  List<Widget> _buildVendorCateringStatusWidgets(Booking booking) {
+    final status = booking.proposalStatus;
+    final widgets = <Widget>[];
+    switch (status) {
+      case ProposalStatus.sent:
+      case null:
+        widgets.add(
+          const Text(
+            'Customer is waiting for your quote.',
+            style: TextStyle(color: Colors.black87),
+          ),
+        );
+        widgets.add(const SizedBox(height: 8));
+        widgets.add(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              ElevatedButton(
+                onPressed: () => _promptVendorQuote(booking),
+                child: const Text('Send quote'),
+              ),
+              OutlinedButton(
+                onPressed: () => _respondToCateringCounter(booking, false),
+                child: const Text('Decline'),
+              ),
+            ],
+          ),
+        );
+        break;
+      case ProposalStatus.vendorQuoted:
+        widgets.add(
+          Text(
+            'Quote sent: ${_formatCurrency(booking.vendorQuoteAmount ?? 0)}',
+            style: const TextStyle(color: Colors.black87),
+          ),
+        );
+        widgets.add(
+          const Text(
+            'Waiting for the customer to respond.',
+            style: TextStyle(color: Colors.black54),
+          ),
+        );
+        break;
+      case ProposalStatus.userCounter:
+        widgets.add(
+          Text(
+            'Counter offer: ${_formatCurrency(booking.userCounterAmount ?? 0)}',
+            style: const TextStyle(color: Colors.black87),
+          ),
+        );
+        widgets.add(const SizedBox(height: 8));
+        widgets.add(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: () => _respondToCateringCounter(booking, false),
+                child: const Text('Decline'),
+              ),
+              ElevatedButton(
+                onPressed: () => _respondToCateringCounter(booking, true),
+                child: const Text('Accept counter'),
+              ),
+            ],
+          ),
+        );
+        break;
+      case ProposalStatus.vendorAccepted:
+        widgets.add(
+          const Text(
+            'Proposal accepted. Awaiting customer payment.',
+            style: TextStyle(color: Colors.black54),
+          ),
+        );
+        break;
+      case ProposalStatus.vendorDeclined:
+        widgets.add(
+          const Text(
+            'You declined this proposal.',
+            style: TextStyle(color: Colors.redAccent),
+          ),
+        );
+        break;
+    }
+    return widgets;
+  }
+
+  Future<void> _promptVendorQuote(Booking booking) async {
+    final controller = TextEditingController(
+      text: booking.vendorQuoteAmount?.toStringAsFixed(0) ?? '',
+    );
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<double>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 24,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _bookingAlertBackground,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 30,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Send quote',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: controller,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Quote amount (Rs)',
+                        ),
+                        validator: (value) {
+                          final parsed = double.tryParse(value ?? '');
+                          if (parsed == null || parsed <= 0) {
+                            return 'Enter a valid amount';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OutlinedButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _bookingAlertPrimary,
+                              side: const BorderSide(
+                                color: _bookingAlertPrimary,
+                              ),
+                              shape: const StadiumBorder(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 22,
+                                vertical: 10,
+                              ),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                          const SizedBox(width: 16),
+                          FilledButton(
+                            onPressed: () {
+                              if (!formKey.currentState!.validate()) return;
+                              final value = double.parse(controller.text);
+                              Navigator.of(dialogContext).pop(value);
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _bookingAlertPrimary,
+                              foregroundColor: Colors.white,
+                              shape: const StadiumBorder(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 26,
+                                vertical: 12,
+                              ),
+                            ),
+                            child: const Text('Send quote'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (result == null) return;
+    try {
+      await _bookingRepository.vendorSendQuote(
+        bookingId: booking.id,
+        amount: result,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quote sent to the customer.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Unable to send quote: $error')));
+      }
+    }
+  }
+
+  Future<void> _respondToCateringCounter(Booking booking, bool accept) async {
+    try {
+      await _bookingRepository.vendorRespondToCounter(
+        bookingId: booking.id,
+        accept: accept,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            accept ? 'Counter offer accepted.' : 'Proposal declined.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to update proposal: $error')),
+      );
+    }
   }
 
   Future<void> _handleBookingUpdate(
@@ -2452,6 +3210,104 @@ class _ProfileDetailRow extends StatelessWidget {
   }
 }
 
+class _CateringMenuSection extends StatelessWidget {
+  const _CateringMenuSection({required this.items});
+
+  final List<VendorMenuItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        ),
+        child: const Text(
+          'Add menu items to highlight your catering dishes.',
+          style: TextStyle(color: Colors.black54),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Menu items',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+          const SizedBox(height: 12),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.circle,
+                    size: 10,
+                    color: item.isVeg ? Colors.green : Colors.redAccent,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      item.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: item.isVeg
+                          ? Colors.green.withValues(alpha: 0.12)
+                          : Colors.redAccent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      item.isVeg ? 'Veg' : 'Non-veg',
+                      style: TextStyle(
+                        color: item.isVeg
+                            ? Colors.green.shade700
+                            : Colors.redAccent,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DecorationPackageCarousel extends StatefulWidget {
   const _DecorationPackageCarousel({
     required this.packages,
@@ -2462,10 +3318,12 @@ class _DecorationPackageCarousel extends StatefulWidget {
   final String Function(double value) formatCurrency;
 
   @override
-  State<_DecorationPackageCarousel> createState() => _DecorationPackageCarouselState();
+  State<_DecorationPackageCarousel> createState() =>
+      _DecorationPackageCarouselState();
 }
 
-class _DecorationPackageCarouselState extends State<_DecorationPackageCarousel> {
+class _DecorationPackageCarouselState
+    extends State<_DecorationPackageCarousel> {
   late final PageController _controller;
   int _currentPage = 0;
 
@@ -2523,8 +3381,7 @@ class _DecorationPackageCarouselState extends State<_DecorationPackageCarousel> 
                         errorBuilder: (_, __, ___) => Container(
                           color: Colors.grey.shade200,
                           alignment: Alignment.center,
-                          child:
-                              const Icon(Icons.image_not_supported_outlined),
+                          child: const Icon(Icons.image_not_supported_outlined),
                         ),
                       ),
                       Container(
@@ -2581,9 +3438,7 @@ class _DecorationPackageCarouselState extends State<_DecorationPackageCarousel> 
               height: 8,
               width: _currentPage == index ? 18 : 8,
               decoration: BoxDecoration(
-                color: _currentPage == index
-                    ? Colors.black87
-                    : Colors.black26,
+                color: _currentPage == index ? Colors.black87 : Colors.black26,
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
@@ -2593,6 +3448,7 @@ class _DecorationPackageCarouselState extends State<_DecorationPackageCarousel> 
     );
   }
 }
+
 class _VendorMetric extends StatelessWidget {
   final String label;
   final String value;
@@ -2619,9 +3475,283 @@ class _VendorMetric extends StatelessWidget {
   }
 }
 
+class _HumanResourceInfoSection extends StatelessWidget {
+  const _HumanResourceInfoSection({
+    required this.vendor,
+    required this.formatCurrency,
+  });
 
+  final Vendor vendor;
+  final String Function(double value) formatCurrency;
 
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _hrRow(
+            'Experience',
+            vendor.experience.isEmpty ? 'N/A' : vendor.experience,
+          ),
+          _hrRow('Hourly charge', formatCurrency(vendor.price)),
+          _hrRow(
+            'Languages',
+            vendor.languages.isEmpty ? 'N/A' : vendor.languages,
+          ),
+          _hrRow(
+            'Education',
+            vendor.education.isEmpty ? 'N/A' : vendor.education,
+          ),
+          _hrRow('Area', vendor.area.isEmpty ? 'N/A' : vendor.area),
+          _hrRow('State', vendor.state.isEmpty ? 'N/A' : vendor.state),
+          _hrRow(
+            'Proof',
+            vendor.proofUrl.isEmpty
+                ? 'Not uploaded'
+                : 'Verified document uploaded',
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _hrRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.black54,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
+class _PayoutBreakdown extends StatelessWidget {
+  const _PayoutBreakdown({
+    required this.amount,
+    required this.settlementLabel,
+    required this.formatCurrency,
+    this.showSubtraction = false,
+    this.onInfoTap,
+  });
 
+  final double amount;
+  final String settlementLabel;
+  final String Function(double value) formatCurrency;
+  final bool showSubtraction;
+  final VoidCallback? onInfoTap;
 
+  @override
+  Widget build(BuildContext context) {
+    if (amount <= 0) return const SizedBox.shrink();
+    final fees = _calculateFees(amount);
+    final textStyle = TextStyle(
+      color: Colors.black.withValues(alpha: 0.75),
+      fontSize: 13,
+    );
+
+    if (!showSubtraction) {
+      return Row(
+        children: [
+          Expanded(
+            child: Text(
+              '$settlementLabel: ${formatCurrency(fees.totalWithFees)}',
+              style: textStyle.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (onInfoTap != null)
+            IconButton(
+              onPressed: onInfoTap,
+              icon: const Icon(Icons.info_outline, size: 18),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              splashRadius: 16,
+              tooltip: 'View fee breakdown',
+            ),
+        ],
+      );
+    }
+
+    final vendorDeductions = fees.gst + fees.pgFee;
+    final vendorNet = fees.base - vendorDeductions;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$settlementLabel: ${formatCurrency(fees.base)}',
+                style: textStyle.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (onInfoTap != null)
+              IconButton(
+                onPressed: onInfoTap,
+                icon: const Icon(Icons.info_outline, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                splashRadius: 16,
+                tooltip: 'View fee breakdown',
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'You receive: ${formatCurrency(vendorNet)} '
+          '(after GST and payment gateway fees)',
+          style: textStyle.copyWith(fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+}
+
+FeeBreakdown _calculateFees(double amount) => calculateFeeBreakdown(amount);
+
+Future<void> _showBookingAlertCard({
+  required BuildContext context,
+  required String heading,
+  required String name,
+  required String message,
+  required VoidCallback onView,
+}) {
+  SystemSound.play(SystemSoundType.alert);
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _bookingAlertBackground,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 30,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                heading,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: _bookingAlertPrimary.withValues(alpha: 0.9),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: Colors.black87,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _bookingAlertPrimary,
+                      side: BorderSide(color: _bookingAlertPrimary),
+                      shape: const StadiumBorder(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 10,
+                      ),
+                    ),
+                    child: const Text('Later'),
+                  ),
+                  const SizedBox(width: 16),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      onView();
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _bookingAlertPrimary,
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 12,
+                      ),
+                    ),
+                    child: const Text('View booking'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+String _formatDeliveryDateTime(BuildContext context, DateTime value) {
+  final dateLabel = '${value.day}/${value.month}/${value.year}';
+  final timeLabel = MaterialLocalizations.of(context).formatTimeOfDay(
+    TimeOfDay.fromDateTime(value),
+    alwaysUse24HourFormat: false,
+  );
+  return '$dateLabel at $timeLabel';
+}

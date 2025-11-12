@@ -9,15 +9,14 @@ import 'models/category.dart';
 import 'models/vendor.dart';
 
 class _DecorationPackageEntry {
-  _DecorationPackageEntry({
-    required this.imageUrl,
-    double price = 0,
-  }) : priceController = TextEditingController(
-            text: price == 0
-                ? ''
-                : price % 1 == 0
-                    ? price.toStringAsFixed(0)
-                    : price.toStringAsFixed(2));
+  _DecorationPackageEntry({required this.imageUrl, double price = 0})
+    : priceController = TextEditingController(
+        text: price == 0
+            ? ''
+            : price % 1 == 0
+            ? price.toStringAsFixed(0)
+            : price.toStringAsFixed(2),
+      );
 
   String imageUrl;
   final TextEditingController priceController;
@@ -25,6 +24,18 @@ class _DecorationPackageEntry {
   double get price => double.tryParse(priceController.text.trim()) ?? 0;
 
   void dispose() => priceController.dispose();
+}
+
+class _MenuItemEntry {
+  _MenuItemEntry({String name = '', this.isVeg = true})
+    : nameController = TextEditingController(text: name);
+
+  final TextEditingController nameController;
+  bool isVeg;
+
+  String get name => nameController.text.trim();
+
+  void dispose() => nameController.dispose();
 }
 
 class VendorEditSheet extends StatefulWidget {
@@ -61,6 +72,10 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
   late final TextEditingController _locationController;
   late final TextEditingController _areaController;
   late final TextEditingController _pincodeController;
+  late final TextEditingController _experienceController;
+  late final TextEditingController _languagesController;
+  late final TextEditingController _educationController;
+  late final TextEditingController _stateController;
 
   static const int _maxGalleryImages = 6;
   static const List<String> _placeholderImages = [
@@ -73,6 +88,8 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
   ];
   final List<String> _imageUrls = [];
   final List<_DecorationPackageEntry> _decorationPackages = [];
+  final List<_MenuItemEntry> _menuItems = [];
+  String _proofUrl = '';
 
   bool _ac = false;
   Category? _selectedCategory;
@@ -95,13 +112,26 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
     }
 
     _priceController = TextEditingController(text: formatNumber(vendor?.price));
-    _seatingController = TextEditingController(text: formatNumber(vendor?.capacity));
-    _parkingController = TextEditingController(text: formatNumber(vendor?.parkingCapacity));
-_occasionsController = TextEditingController(text: vendor?.occasions.join(', ') ?? '');
+    _seatingController = TextEditingController(
+      text: formatNumber(vendor?.capacity),
+    );
+    _parkingController = TextEditingController(
+      text: formatNumber(vendor?.parkingCapacity),
+    );
+    _occasionsController = TextEditingController(
+      text: vendor?.occasions.join(', ') ?? '',
+    );
     _moreController = TextEditingController(text: vendor?.moreDetails ?? '');
     _locationController = TextEditingController(text: vendor?.location ?? '');
     _areaController = TextEditingController(text: vendor?.area ?? '');
     _pincodeController = TextEditingController(text: vendor?.pincode ?? '');
+    _experienceController = TextEditingController(
+      text: vendor?.experience ?? '',
+    );
+    _languagesController = TextEditingController(text: vendor?.languages ?? '');
+    _educationController = TextEditingController(text: vendor?.education ?? '');
+    _stateController = TextEditingController(text: vendor?.state ?? '');
+    _proofUrl = vendor?.proofUrl ?? '';
     _ac = vendor?.ac ?? false;
 
     if (vendor != null) {
@@ -119,11 +149,14 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
     if (vendor != null && vendor.decorationPackages.isNotEmpty) {
       for (final pkg in vendor.decorationPackages) {
         _decorationPackages.add(
-          _DecorationPackageEntry(
-            imageUrl: pkg.imageUrl,
-            price: pkg.price,
-          ),
+          _DecorationPackageEntry(imageUrl: pkg.imageUrl, price: pkg.price),
         );
+      }
+    }
+
+    if (vendor != null && vendor.menuItems.isNotEmpty) {
+      for (final item in vendor.menuItems) {
+        _menuItems.add(_MenuItemEntry(name: item.name, isVeg: item.isVeg));
       }
     }
   }
@@ -148,9 +181,13 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
   @override
   void didUpdateWidget(covariant VendorEditSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.categories != oldWidget.categories && widget.categories.isNotEmpty) {
+    if (widget.categories != oldWidget.categories &&
+        widget.categories.isNotEmpty) {
       setState(() {
-        _selectedCategory ??= _resolveInitialCategory(widget.categories, widget.vendor);
+        _selectedCategory ??= _resolveInitialCategory(
+          widget.categories,
+          widget.vendor,
+        );
       });
     }
   }
@@ -169,8 +206,15 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
     _locationController.dispose();
     _areaController.dispose();
     _pincodeController.dispose();
+    _experienceController.dispose();
+    _languagesController.dispose();
+    _educationController.dispose();
+    _stateController.dispose();
     for (final entry in _decorationPackages) {
       entry.dispose();
+    }
+    for (final item in _menuItems) {
+      item.dispose();
     }
     super.dispose();
   }
@@ -183,13 +227,30 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
     return name.contains('decor');
   }
 
+  bool get _isCatering {
+    final name = _selectedCategory?.name.toLowerCase() ?? '';
+    if (name.contains('cater')) return true;
+    final service = _serviceController.text.toLowerCase();
+    return service.contains('cater');
+  }
+
+  bool get _isHumanResource {
+    final name = _selectedCategory?.name.toLowerCase() ?? '';
+    if (name.contains('human')) return true;
+    final service = _serviceController.text.toLowerCase();
+    return service.contains('human');
+  }
+
   Future<void> _pickAndUploadImages() async {
     if (!_canAddMoreImages) return;
     final remaining = _maxGalleryImages - _imageUrls.length;
     final picker = ImagePicker();
     var selections = await picker.pickMultiImage(imageQuality: 85);
     if (selections.isEmpty) {
-      final single = await picker.pickImage(imageQuality: 85, source: ImageSource.gallery);
+      final single = await picker.pickImage(
+        imageQuality: 85,
+        source: ImageSource.gallery,
+      );
       if (single != null) {
         selections = [single];
       }
@@ -239,9 +300,7 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
       if (!mounted) return;
       if (url != null) {
         setState(() {
-          _decorationPackages.add(
-            _DecorationPackageEntry(imageUrl: url),
-          );
+          _decorationPackages.add(_DecorationPackageEntry(imageUrl: url));
         });
       }
     } finally {
@@ -271,6 +330,43 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
     }
   }
 
+  void _addMenuItem() {
+    setState(() {
+      _menuItems.add(_MenuItemEntry());
+    });
+  }
+
+  void _removeMenuItem(int index) {
+    if (index < 0 || index >= _menuItems.length) return;
+    final entry = _menuItems[index];
+    entry.dispose();
+    setState(() {
+      _menuItems.removeAt(index);
+    });
+  }
+
+  Future<void> _uploadProofDocument() async {
+    if (_uploadingImage) return;
+    final picker = ImagePicker();
+    final selection = await picker.pickImage(
+      imageQuality: 85,
+      source: ImageSource.gallery,
+    );
+    if (selection == null) return;
+    setState(() => _uploadingImage = true);
+    try {
+      final url = await _uploadImageForSelection(selection);
+      if (!mounted) return;
+      if (url != null) {
+        setState(() => _proofUrl = url);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingImage = false);
+      }
+    }
+  }
+
   bool _isStorageUnavailable(FirebaseException error) {
     final message = error.message ?? '';
     return message.contains('Not Found') ||
@@ -290,9 +386,10 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
       return selection.mimeType;
     }
     try {
-      final header = await file
-          .openRead(0, 32)
-          .fold<List<int>>(<int>[], (previous, element) {
+      final header = await file.openRead(0, 32).fold<List<int>>(<int>[], (
+        previous,
+        element,
+      ) {
         final remaining = 32 - previous.length;
         if (remaining <= 0) return previous;
         if (element.length > remaining) {
@@ -323,8 +420,7 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
     final trimmed = original.trim();
     if (trimmed.isEmpty) return 'image';
     final withoutExt = trimmed.replaceAll(RegExp(r'\.[^\.]+$'), '');
-    final sanitized =
-        withoutExt.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final sanitized = withoutExt.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
     if (sanitized.isEmpty) return 'image';
     return sanitized.length > 40 ? sanitized.substring(0, 40) : sanitized;
   }
@@ -367,7 +463,9 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _buildDecorationPackagesSection() {
@@ -438,10 +536,262 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
     );
   }
 
-  Widget _buildDecorationPackageCard(
-    _DecorationPackageEntry entry,
-    int index,
-  ) {
+  Widget _buildMenuItemsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Menu items',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            Text(
+              '${_menuItems.length} added',
+              style: const TextStyle(color: Colors.black54, fontSize: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_menuItems.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+            ),
+            child: const Text(
+              'Add your signature dishes to help customers understand your catering menu.',
+              style: TextStyle(color: Colors.black54),
+            ),
+          )
+        else
+          Column(
+            children: [
+              for (var i = 0; i < _menuItems.length; i++)
+                _buildMenuItemCard(_menuItems[i], i),
+            ],
+          ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: _addMenuItem,
+            icon: const Icon(Icons.add),
+            label: const Text('Add item'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMenuItemCard(_MenuItemEntry entry, int index) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: entry.nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Item name',
+                    hintText: 'e.g. Paneer butter masala',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                tooltip: 'Remove item',
+                onPressed: () => _removeMenuItem(index),
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Switch(
+                value: entry.isVeg,
+                onChanged: (value) => setState(() => entry.isVeg = value),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                entry.isVeg ? 'Vegetarian' : 'Non-vegetarian',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHumanResourceSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildTextField(
+                _experienceController,
+                label: 'Experience (years)',
+                keyboard: TextInputType.text,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildTextField(
+                _priceController,
+                label: 'Hourly charge (Rs)',
+                keyboard: TextInputType.number,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(
+          _languagesController,
+          label: 'Languages',
+          minLines: 1,
+          maxLines: 2,
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(
+          _educationController,
+          label: 'Education / course',
+          minLines: 1,
+          maxLines: 2,
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(
+          _locationController,
+          label: 'Address',
+          minLines: 1,
+          maxLines: 2,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTextField(_areaController, label: 'Area / locality'),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildTextField(
+                _pincodeController,
+                label: 'Pincode',
+                keyboard: TextInputType.number,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(_stateController, label: 'State'),
+        const SizedBox(height: 16),
+        _buildProofUploadCard(),
+      ],
+    );
+  }
+
+  Widget _buildProofUploadCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Upload proof (ID / certificate)',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          if (_proofUrl.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.verified, color: Colors.green),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Proof uploaded',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _uploadingImage
+                        ? null
+                        : () => setState(() => _proofUrl = ''),
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Remove proof',
+                  ),
+                ],
+              ),
+            ),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _uploadingImage ? null : _uploadProofDocument,
+              icon: _uploadingImage
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_upload_outlined),
+              label: Text(_proofUrl.isEmpty ? 'Attach proof' : 'Replace proof'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                textStyle: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Upload a clear photo or PDF of your ID / certificate.',
+            style: TextStyle(color: Colors.black54, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDecorationPackageCard(_DecorationPackageEntry entry, int index) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -485,8 +835,10 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
                     color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   child: const Text(
                     'Change',
                     style: TextStyle(color: Colors.white, fontSize: 11),
@@ -499,11 +851,10 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
           Expanded(
             child: TextFormField(
               controller: entry.priceController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Price (Rs)',
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
               ),
+              decoration: const InputDecoration(labelText: 'Price (Rs)'),
             ),
           ),
           IconButton(
@@ -655,6 +1006,9 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.vendor != null;
+    final isDecoration = _isDecoration;
+    final isCatering = _isCatering;
+    final isHumanResource = _isHumanResource;
     return Padding(
       padding: MediaQuery.of(context).viewInsets,
       child: SingleChildScrollView(
@@ -670,7 +1024,10 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
                 children: [
                   Text(
                     isEditing ? 'Edit vendor details' : 'Create vendor profile',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -679,11 +1036,23 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
                 ],
               ),
               const SizedBox(height: 12),
-              _buildTextField(_nameController, label: 'Name', validatorMessage: 'Please enter vendor name'),
+              _buildTextField(
+                _nameController,
+                label: 'Name',
+                validatorMessage: 'Please enter vendor name',
+              ),
               const SizedBox(height: 12),
-              _buildTextField(_emailController, label: 'Email', keyboard: TextInputType.emailAddress),
+              _buildTextField(
+                _emailController,
+                label: 'Email',
+                keyboard: TextInputType.emailAddress,
+              ),
               const SizedBox(height: 12),
-              _buildTextField(_phoneController, label: 'Phone', keyboard: TextInputType.phone),
+              _buildTextField(
+                _phoneController,
+                label: 'Phone',
+                keyboard: TextInputType.phone,
+              ),
               const SizedBox(height: 12),
               _buildTextField(_serviceController, label: 'Service / Offering'),
               const SizedBox(height: 12),
@@ -692,7 +1061,12 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
                   value: _selectedCategory,
                   decoration: const InputDecoration(labelText: 'Category'),
                   items: widget.categories
-                      .map((category) => DropdownMenuItem(value: category, child: Text(category.name)))
+                      .map(
+                        (category) => DropdownMenuItem(
+                          value: category,
+                          child: Text(category.name),
+                        ),
+                      )
                       .toList(),
                   onChanged: (value) {
                     if (value == null) return;
@@ -705,8 +1079,16 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
                   style: TextStyle(color: Colors.redAccent),
                 ),
               const SizedBox(height: 12),
-              if (_isDecoration) ...[
+              if (isHumanResource) ...[
+                _buildHumanResourceSection(),
+                const SizedBox(height: 12),
+              ] else if (isDecoration) ...[
                 _buildDecorationPackagesSection(),
+                const SizedBox(height: 12),
+              ] else if (isCatering) ...[
+                _buildMenuItemsSection(),
+                const SizedBox(height: 12),
+                _buildGallerySection(),
                 const SizedBox(height: 12),
               ] else ...[
                 Row(
@@ -753,41 +1135,47 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
                 _buildGallerySection(),
                 const SizedBox(height: 12),
               ],
-              _buildTextField(
-                _occasionsController,
-                label: 'Occasions (comma separated)',
-                minLines: 1,
-                maxLines: 2,
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                _moreController,
-                label: 'More details / highlights',
-                minLines: 1,
-                maxLines: 3,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      _areaController,
-                      label: 'Area / locality',
+              if (!isHumanResource) ...[
+                _buildTextField(
+                  _occasionsController,
+                  label: 'Occasions (comma separated)',
+                  minLines: 1,
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                _buildTextField(
+                  _moreController,
+                  label: 'More details / highlights',
+                  minLines: 1,
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        _areaController,
+                        label: 'Area / locality',
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildTextField(
-                      _pincodeController,
-                      label: 'Pincode',
-                      keyboard: TextInputType.number,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildTextField(
+                        _pincodeController,
+                        label: 'Pincode',
+                        keyboard: TextInputType.number,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(_locationController, label: 'Location / address'),
-              const SizedBox(height: 24),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildTextField(
+                  _locationController,
+                  label: 'Location / address',
+                ),
+                const SizedBox(height: 24),
+              ] else
+                const SizedBox(height: 12),
               Row(
                 children: [
                   if (widget.onDelete != null)
@@ -795,13 +1183,21 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
                       onPressed: _submitting ? null : widget.onDelete,
                       icon: const Icon(Icons.delete_outline),
                       label: const Text('Delete'),
-                      style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                      ),
                     ),
                   const Spacer(),
                   ElevatedButton(
-                    onPressed: _submitting || _selectedCategory == null ? null : _submit,
+                    onPressed: _submitting || _selectedCategory == null
+                        ? null
+                        : _submit,
                     child: _submitting
-                        ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : Text(isEditing ? 'Save changes' : 'Create vendor'),
                   ),
                 ],
@@ -829,7 +1225,9 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
       decoration: InputDecoration(labelText: label),
       validator: validatorMessage == null
           ? null
-          : (value) => (value == null || value.trim().isEmpty) ? validatorMessage : null,
+          : (value) => (value == null || value.trim().isEmpty)
+                ? validatorMessage
+                : null,
     );
   }
 
@@ -850,49 +1248,64 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
       final parking = int.tryParse(_parkingController.text.trim()) ?? 0;
 
       final isDecoration = _isDecoration;
+      final isCatering = _isCatering;
+      final isHumanResource = _isHumanResource;
       final decorationPackages = isDecoration
           ? _decorationPackages
-              .where((entry) => entry.imageUrl.isNotEmpty)
-              .map(
-                (entry) => {
-                  'imageUrl': entry.imageUrl,
-                  'price': entry.price,
-                },
-              )
-              .toList()
+                .where((entry) => entry.imageUrl.isNotEmpty)
+                .map(
+                  (entry) => {'imageUrl': entry.imageUrl, 'price': entry.price},
+                )
+                .toList()
           : const <Map<String, dynamic>>[];
       final packageImages = decorationPackages
           .map((pkg) => pkg['imageUrl'] as String)
           .where((url) => url.isNotEmpty)
           .toList();
-      final galleryImages =
-          isDecoration ? packageImages : List<String>.from(_imageUrls);
-      final primaryImage =
-          galleryImages.isNotEmpty ? galleryImages.first : '';
+      final galleryImages = isDecoration
+          ? packageImages
+          : List<String>.from(_imageUrls);
+      final menuItems = isCatering
+          ? _menuItems
+                .where((entry) => entry.name.isNotEmpty)
+                .map((entry) => {'name': entry.name, 'isVeg': entry.isVeg})
+                .toList()
+          : const <Map<String, dynamic>>[];
+      final primaryImage = galleryImages.isNotEmpty ? galleryImages.first : '';
+      final suppressPricing = isDecoration || isCatering;
+      final suppressVenueMetrics =
+          isDecoration || isCatering || isHumanResource;
       final payload = <String, dynamic>{
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'type': _serviceController.text.trim(),
         'service': _serviceController.text.trim(),
-        'pricePerHour': isDecoration ? 0 : price,
-        'price': isDecoration ? 0 : price,
-        'seatingCapacity': isDecoration ? 0 : seating,
-        'capacity': isDecoration ? 0 : seating,
-        'parkingCapacity': isDecoration ? 0 : parking,
-        'ac': isDecoration ? false : _ac,
-        'occasions': occasions,
-        'occasionsFor': occasions.join(', '),
-        'more': _moreController.text.trim(),
-        'moreDetails': _moreController.text.trim(),
+        'pricePerHour': suppressPricing ? 0 : price,
+        'price': suppressPricing ? 0 : price,
+        'seatingCapacity': suppressVenueMetrics ? 0 : seating,
+        'capacity': suppressVenueMetrics ? 0 : seating,
+        'parkingCapacity': suppressVenueMetrics ? 0 : parking,
+        'ac': suppressVenueMetrics ? false : _ac,
+        'occasions': isHumanResource ? <String>[] : occasions,
+        'occasionsFor': isHumanResource ? '' : occasions.join(', '),
+        'more': isHumanResource ? '' : _moreController.text.trim(),
+        'moreDetails': isHumanResource ? '' : _moreController.text.trim(),
         'imageUrl': primaryImage,
         'image': primaryImage,
         'galleryImages': galleryImages,
         'images': galleryImages,
         'decorationPackages': decorationPackages,
+        'menuItems': menuItems,
+        'menu': menuItems,
         'location': _locationController.text.trim(),
         'area': _areaController.text.trim(),
         'pincode': _pincodeController.text.trim(),
+        'experience': isHumanResource ? _experienceController.text.trim() : '',
+        'languages': isHumanResource ? _languagesController.text.trim() : '',
+        'education': isHumanResource ? _educationController.text.trim() : '',
+        'state': isHumanResource ? _stateController.text.trim() : '',
+        'proofUrl': isHumanResource ? _proofUrl : '',
       };
 
       widget.onSubmit(_selectedCategory!, payload);
@@ -902,10 +1315,3 @@ _occasionsController = TextEditingController(text: vendor?.occasions.join(', ') 
     }
   }
 }
-
-
-
-
-
-
-

@@ -5,6 +5,8 @@ import 'models/booking.dart';
 import 'user_navigation.dart';
 import 'payment/razorpay_keys.dart';
 import 'services/booking_repository.dart';
+import 'utils/dialog_utils.dart';
+import 'utils/fee_utils.dart';
 
 const Color _backgroundCream = Color(0xFFFEFAF4);
 const Color _cardSurface = Colors.white;
@@ -40,7 +42,10 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
   @override
   Widget build(BuildContext context) {
     final booking = widget.booking;
-    final total = booking.totalAmount;
+    final feeBreakdown = calculateFeeBreakdown(booking.totalAmount);
+    final total = feeBreakdown.totalWithFees;
+    final itemTotal = feeBreakdown.base;
+    final taxesAndFee = feeBreakdown.totalWithFees - feeBreakdown.base;
     final price = booking.pricePerHour;
     final timeRange = _formatTimeRange(booking);
     return Scaffold(
@@ -85,8 +90,27 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                     ),
                     _summaryRow('Rate per hour', _formatCurrency(price)),
                     const Divider(height: 28),
+                    const Text(
+                      'Payment summary',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _summaryRow('Item total', _formatCurrency(itemTotal)),
                     _summaryRow(
-                      'Amount due',
+                      'Taxes & fee',
+                      _formatCurrency(taxesAndFee),
+                      onInfoTap: () => showFeeBreakdownDialog(
+                        context: context,
+                        breakdown: feeBreakdown,
+                        formatCurrency: _formatCurrency,
+                      ),
+                    ),
+                    const Divider(height: 24),
+                    _summaryRow(
+                      'Amount to pay',
                       _formatCurrency(total),
                       emphasize: true,
                     ),
@@ -130,7 +154,7 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
 
   Future<void> _handlePayment() async {
     final booking = widget.booking;
-    final amount = booking.totalAmount;
+    final amount = calculateFeeBreakdown(booking.totalAmount).totalWithFees;
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -216,16 +240,35 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
     );
   }
 
-  Widget _summaryRow(String label, String value, {bool emphasize = false}) {
+  Widget _summaryRow(
+    String label,
+    String value, {
+    bool emphasize = false,
+    VoidCallback? onInfoTap,
+  }) {
     final style = emphasize
         ? const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)
         : const TextStyle(fontSize: 14, fontWeight: FontWeight.w500);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: Text(label)),
+                if (onInfoTap != null)
+                  IconButton(
+                    onPressed: onInfoTap,
+                    icon: const Icon(Icons.info_outline, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    splashRadius: 16,
+                    tooltip: 'View fee breakdown',
+                  ),
+              ],
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(value, textAlign: TextAlign.end, style: style),

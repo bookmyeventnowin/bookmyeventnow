@@ -18,6 +18,7 @@ class Vendor {
   final String imageUrl;
   final List<String> galleryImages;
   final List<VendorDecorationPackage> decorationPackages;
+  final List<VendorMenuItem> menuItems;
   final String categoryId;
   final List<String> categoryIds;
   final String categoryName;
@@ -25,6 +26,11 @@ class Vendor {
   final String location;
   final String area;
   final String pincode;
+  final String experience;
+  final String languages;
+  final String education;
+  final String state;
+  final String proofUrl;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? subscriptionPaidAt;
@@ -48,6 +54,7 @@ class Vendor {
     required this.imageUrl,
     required this.galleryImages,
     required this.decorationPackages,
+    required this.menuItems,
     required this.categoryId,
     required this.categoryIds,
     required this.categoryName,
@@ -55,6 +62,11 @@ class Vendor {
     required this.location,
     required this.area,
     required this.pincode,
+    required this.experience,
+    required this.languages,
+    required this.education,
+    required this.state,
+    required this.proofUrl,
     required this.createdAt,
     required this.updatedAt,
     required this.subscriptionPaidAt,
@@ -121,6 +133,17 @@ class Vendor {
     if (rawImages is Iterable) {
       for (final item in rawImages) {
         addGalleryItem(item);
+      }
+    }
+
+    final menuItems = <VendorMenuItem>[];
+    final rawMenu = data['menuItems'] ?? data['menu'];
+    if (rawMenu is Iterable) {
+      for (final item in rawMenu) {
+        final menuItem = VendorMenuItem.fromMap(item);
+        if (menuItem != null && menuItem.name.isNotEmpty) {
+          menuItems.add(menuItem);
+        }
       }
     }
 
@@ -222,6 +245,7 @@ class Vendor {
       })(),
       galleryImages: List.unmodifiable(galleryImages),
       decorationPackages: List.unmodifiable(decorationPackages),
+      menuItems: List.unmodifiable(menuItems),
       categoryId: primaryCategoryId,
       categoryIds: categoryIds.toSet().toList(),
       categoryName: primaryCategoryName,
@@ -232,6 +256,17 @@ class Vendor {
           '',
       area: (data['area'] as String?)?.trim() ?? '',
       pincode: _normalizePincode(data['pincode']),
+      experience: (data['experience'] as String?)?.trim() ?? '',
+      languages: (data['languages'] as String?)?.trim() ?? '',
+      education:
+          (data['education'] as String?)?.trim() ??
+          (data['educationCourse'] as String?)?.trim() ??
+          '',
+      state: (data['state'] as String?)?.trim() ?? '',
+      proofUrl:
+          (data['proofUrl'] as String?)?.trim() ??
+          (data['proof'] as String?)?.trim() ??
+          '',
       createdAt: parseTimestamp(data['createdAt']),
       updatedAt: parseTimestamp(data['updatedAt']),
       subscriptionPaidAt: parseTimestamp(data['subscriptionPaidAt']),
@@ -274,11 +309,19 @@ class Vendor {
       'image': imageUrl,
       'galleryImages': galleryImages,
       'images': galleryImages,
-      'decorationPackages':
-          decorationPackages.map((pkg) => pkg.toMap()).toList(),
+      'decorationPackages': decorationPackages
+          .map((pkg) => pkg.toMap())
+          .toList(),
+      'menuItems': menuItems.map((item) => item.toMap()).toList(),
+      'menu': menuItems.map((item) => item.toMap()).toList(),
       'location': location,
       'area': area,
       'pincode': pincode,
+      'experience': experience,
+      'languages': languages,
+      'education': education,
+      'state': state,
+      'proofUrl': proofUrl,
       'subscriptionPaidAt': subscriptionPaidAt != null
           ? Timestamp.fromDate(subscriptionPaidAt!)
           : null,
@@ -333,10 +376,7 @@ class Vendor {
 class VendorDecorationPackage {
   final String imageUrl;
   final double price;
-  const VendorDecorationPackage({
-    required this.imageUrl,
-    required this.price,
-  });
+  const VendorDecorationPackage({required this.imageUrl, required this.price});
 
   factory VendorDecorationPackage.fromJson(Map<String, dynamic> json) {
     return VendorDecorationPackage(
@@ -345,10 +385,7 @@ class VendorDecorationPackage {
     );
   }
 
-  Map<String, dynamic> toMap() => {
-        'imageUrl': imageUrl,
-        'price': price,
-      };
+  Map<String, dynamic> toMap() => {'imageUrl': imageUrl, 'price': price};
 
   static VendorDecorationPackage? fromMap(dynamic data) {
     if (data is VendorDecorationPackage) return data;
@@ -356,6 +393,37 @@ class VendorDecorationPackage {
       final imageUrl = (data['imageUrl'] as String?)?.trim();
       if (imageUrl == null) return null;
       return VendorDecorationPackage.fromJson(data);
+    }
+    return null;
+  }
+}
+
+class VendorMenuItem {
+  final String name;
+  final bool isVeg;
+
+  const VendorMenuItem({required this.name, required this.isVeg});
+
+  factory VendorMenuItem.fromJson(Map<String, dynamic> json) {
+    return VendorMenuItem(
+      name: (json['name'] as String?)?.trim() ?? '',
+      isVeg: json['isVeg'] == true,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {'name': name, 'isVeg': isVeg};
+
+  static VendorMenuItem? fromMap(dynamic data) {
+    if (data is VendorMenuItem) return data;
+    if (data is Map<String, dynamic>) {
+      final name = (data['name'] as String?)?.trim();
+      if (name == null || name.isEmpty) return null;
+      return VendorMenuItem.fromJson(data);
+    }
+    if (data is String) {
+      final trimmed = data.trim();
+      if (trimmed.isEmpty) return null;
+      return VendorMenuItem(name: trimmed, isVeg: true);
     }
     return null;
   }

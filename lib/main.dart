@@ -62,7 +62,8 @@ class _AuthGateState extends State<AuthGate> {
         return StreamBuilder<User?>(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
-            if (!splashDone || snapshot.connectionState == ConnectionState.waiting) {
+            if (!splashDone ||
+                snapshot.connectionState == ConnectionState.waiting) {
               return const SplashScreen(showProgress: true);
             }
             final user = snapshot.data;
@@ -111,14 +112,30 @@ class SplashScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Image.asset(
-                  'assets/bmen_logo.png',
-                  width: 140,
-                  height: 140,
+                Image.asset('assets/bmen_logo.png', width: 120, height: 120),
+                const SizedBox(height: 20),
+                const Text(
+                  'Book My Event Now',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: Colors.black87,
+                  ),
                 ),
                 if (showProgress) ...[
                   const SizedBox(height: 32),
-                  const CircularProgressIndicator(strokeWidth: 2),
+                  SizedBox(
+                    width: 200,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: const LinearProgressIndicator(
+                        minHeight: 6,
+                        color: Color(0xFF5A35F6),
+                        backgroundColor: Color(0xFFE5DBFF),
+                      ),
+                    ),
+                  ),
                 ],
               ],
             ),
