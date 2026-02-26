@@ -31,6 +31,9 @@ class Vendor {
   final String education;
   final String state;
   final String proofUrl;
+  final double ratingAverage;
+  final int ratingCount;
+  final double ratingTotal;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? subscriptionPaidAt;
@@ -67,6 +70,9 @@ class Vendor {
     required this.education,
     required this.state,
     required this.proofUrl,
+    required this.ratingAverage,
+    required this.ratingCount,
+    required this.ratingTotal,
     required this.createdAt,
     required this.updatedAt,
     required this.subscriptionPaidAt,
@@ -267,6 +273,11 @@ class Vendor {
           (data['proofUrl'] as String?)?.trim() ??
           (data['proof'] as String?)?.trim() ??
           '',
+      ratingAverage:
+          data['ratingAverage'] is num ? (data['ratingAverage'] as num).toDouble() : 0,
+      ratingCount: data['ratingCount'] is num ? (data['ratingCount'] as num).toInt() : 0,
+      ratingTotal:
+          data['ratingTotal'] is num ? (data['ratingTotal'] as num).toDouble() : 0,
       createdAt: parseTimestamp(data['createdAt']),
       updatedAt: parseTimestamp(data['updatedAt']),
       subscriptionPaidAt: parseTimestamp(data['subscriptionPaidAt']),
@@ -322,6 +333,9 @@ class Vendor {
       'education': education,
       'state': state,
       'proofUrl': proofUrl,
+      'ratingAverage': ratingAverage,
+      'ratingCount': ratingCount,
+      'ratingTotal': ratingTotal,
       'subscriptionPaidAt': subscriptionPaidAt != null
           ? Timestamp.fromDate(subscriptionPaidAt!)
           : null,

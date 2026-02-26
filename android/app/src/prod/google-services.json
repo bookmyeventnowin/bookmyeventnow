@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "432339760583",
+    "project_id": "bmenow-prod-native",
+    "storage_bucket": "bmenow-prod-native.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:432339760583:android:fafea6f2db21d95998d5e2",
+        "android_client_info": {
+          "package_name": "com.bookmyeventnow.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAP9qCcHntWVsk4xngu84dNLzUr3reeYsU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
