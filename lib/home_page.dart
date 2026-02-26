@@ -955,6 +955,15 @@ class _UserHomePageState extends State<UserHomePage> {
   }
 
   Widget _buildUserBookingsCard(List<Booking> bookings, bool isLoading) {
+    // Group bookings by a logical order id so that multiple dates selected
+    // in a single flow appear as one order to the user.
+    final Map<String, List<Booking>> groupedByOrder =
+        <String, List<Booking>>{};
+    for (final booking in bookings) {
+      final key = booking.orderId ?? booking.id;
+      groupedByOrder.putIfAbsent(key, () => <Booking>[]).add(booking);
+    }
+
     return Card(
       color: _cardSurface,
       elevation: 6,
@@ -995,15 +1004,15 @@ class _UserHomePageState extends State<UserHomePage> {
               )
             else
               Column(
-                children: bookings.map((booking) {
-                  final statusColor = _bookingStatusColor(booking.status);
-                  final total = _formatCurrency(booking.totalAmount);
-                  final timeRange = _formatBookingTimeRange(context, booking);
-                  final hours = _hoursForBooking(booking);
-                  final isCatering = booking.isCateringProposal;
-                  final statusWidgets = isCatering
-                      ? _buildUserCateringStatusWidgets(booking)
-                      : _buildStandardUserBookingStatus(booking);
+                children: groupedByOrder.values.map((group) {
+                  // Keep original sort order of bookings within the group.
+                  final bookingsInOrder = List<Booking>.from(group);
+                  bookingsInOrder.sort(
+                    (a, b) => a.eventDate.compareTo(b.eventDate),
+                  );
+                  final Booking primary = bookingsInOrder.first;
+                  final statusColor = _bookingStatusColor(primary.status);
+
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
@@ -1026,7 +1035,7 @@ class _UserHomePageState extends State<UserHomePage> {
                           children: [
                             Expanded(
                               child: Text(
-                                booking.vendorName,
+                                primary.vendorName,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1035,89 +1044,171 @@ class _UserHomePageState extends State<UserHomePage> {
                             Chip(
                               backgroundColor: statusColor.withAlpha(28),
                               label: Text(
-                                booking.status.label,
+                                bookingsInOrder.length > 1
+                                    ? '${bookingsInOrder.length} bookings'
+                                    : primary.status.label,
                                 style: TextStyle(color: statusColor),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Event date: ${_formatBookingDate(booking.eventDate)}',
-                        ),
-                        if (!isCatering && timeRange != null)
-                          Text(
-                            'Time: $timeRange ($hours hr${hours == 1 ? '' : 's'})',
-                          ),
-                        if (isCatering && booking.proposalMenu.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: booking.proposalMenu
-                                .map(
-                                  (item) => Chip(
-                                    avatar: Icon(
-                                      Icons.circle,
-                                      size: 10,
-                                      color: item.isVeg
-                                          ? Colors.green
-                                          : Colors.redAccent,
-                                    ),
-                                    label: Text(item.name),
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
+                        const SizedBox(height: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: bookingsInOrder.map((booking) {
+                            final total =
+                                _formatCurrency(booking.totalAmount);
+                            final timeRange =
+                                _formatBookingTimeRange(context, booking);
+                            final hours = _hoursForBooking(booking);
+                            final isCatering = booking.isCateringProposal;
+                            final statusWidgets = isCatering
+                                ? _buildUserCateringStatusWidgets(booking)
+                                : _buildStandardUserBookingStatus(
+                                    booking,
+                                    showPayNow: false,
+                                  );
+
+                            return Padding(
+                              padding:
+                                  const EdgeInsets.only(bottom: 12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Event date: ${_formatBookingDate(booking.eventDate)}',
                                   ),
+                                  if (!isCatering && timeRange != null)
+                                    Text(
+                                      'Time: $timeRange ($hours hr${hours == 1 ? '' : 's'})',
+                                    ),
+                                  if (isCatering &&
+                                      booking.proposalMenu.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: booking.proposalMenu
+                                          .map(
+                                            (item) => Chip(
+                                              avatar: Icon(
+                                                Icons.circle,
+                                                size: 10,
+                                                color: item.isVeg
+                                                    ? Colors.green
+                                                    : Colors.redAccent,
+                                              ),
+                                              label: Text(item.name),
+                                              materialTapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ],
+                                  if (isCatering &&
+                                      booking.proposalGuestCount != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Text(
+                                        'Guests: ${booking.proposalGuestCount}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  if (isCatering)
+                                    Text(
+                                      booking.totalAmount > 0
+                                          ? 'Current amount: $total'
+                                          : 'Quote pending',
+                                    ),
+                                  if (booking.totalAmount > 0)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: _PayoutBreakdown(
+                                        amount: booking.totalAmount,
+                                        settlementLabel: 'Estimate amount',
+                                        formatCurrency: _formatCurrency,
+                                        onInfoTap: () =>
+                                            showFeeBreakdownDialog(
+                                          context: context,
+                                          breakdown: _calculateFees(
+                                            booking.totalAmount,
+                                          ),
+                                          formatCurrency: _formatCurrency,
+                                        ),
+                                      ),
+                                    ),
+                                  if (isCatering) ...[
+                                    if (booking.proposalDeliveryRequired &&
+                                        (booking.proposalDeliveryAddress ??
+                                                '')
+                                            .isNotEmpty)
+                                      Text(
+                                        'Delivery address: ${booking.proposalDeliveryAddress}',
+                                      ),
+                                    if (!booking.proposalDeliveryRequired)
+                                      const Text(
+                                        'Pickup: you will collect the order',
+                                      ),
+                                    if (booking.proposalDeliveryTime != null)
+                                      Text(
+                                        'Delivery time: ${_formatDeliveryDateTime(
+                                          context,
+                                          booking.proposalDeliveryTime!,
+                                        )}',
+                                      ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  ...statusWidgets,
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        // Order-level payment button: if any booking in this
+                        // logical order is accepted (and not yet paid), show a
+                        // single Pay now button that covers all such bookings.
+                        const SizedBox(height: 4),
+                        Builder(
+                          builder: (_) {
+                            final payable = bookingsInOrder
+                                .where(
+                                  (b) =>
+                                      b.status == BookingStatus.accepted &&
+                                      b.totalAmount > 0,
                                 )
-                                .toList(),
-                          ),
-                        ],
-                        if (isCatering && booking.proposalGuestCount != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              'Guests: ${booking.proposalGuestCount}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
+                                .toList();
+                            if (payable.isEmpty) return const SizedBox();
+                            final combinedAmount = payable.fold<double>(
+                              0,
+                              (sum, b) => sum + b.totalAmount,
+                            );
+                            return Align(
+                              alignment: Alignment.centerRight,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'Total for accepted dates: ${_formatCurrency(combinedAmount)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ElevatedButton(
+                                    onPressed: () => _openPaymentPageForOrder(
+                                      payable,
+                                    ),
+                                    child: const Text('Pay now'),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ),
-                        if (isCatering)
-                          Text(
-                            booking.totalAmount > 0
-                                ? 'Current amount: $total'
-                                : 'Quote pending',
-                          ),
-                        if (booking.totalAmount > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: _PayoutBreakdown(
-                              amount: booking.totalAmount,
-                              settlementLabel: 'Estimate amount',
-                              formatCurrency: _formatCurrency,
-                              onInfoTap: () => showFeeBreakdownDialog(
-                                context: context,
-                                breakdown: _calculateFees(booking.totalAmount),
-                                formatCurrency: _formatCurrency,
-                              ),
-                            ),
-                          ),
-                        if (isCatering) ...[
-                          if (booking.proposalDeliveryRequired &&
-                              (booking.proposalDeliveryAddress ?? '')
-                                  .isNotEmpty)
-                            Text(
-                              'Delivery address: ${booking.proposalDeliveryAddress}',
-                            ),
-                          if (!booking.proposalDeliveryRequired)
-                            const Text('Pickup: you will collect the order'),
-                          if (booking.proposalDeliveryTime != null)
-                            Text(
-                              'Delivery time: ${_formatDeliveryDateTime(context, booking.proposalDeliveryTime!)}',
-                            ),
-                        ],
-                        const SizedBox(height: 12),
-                        ...statusWidgets,
+                            );
+                          },
+                        ),
                       ],
                     ),
                   );
@@ -1150,7 +1241,10 @@ class _UserHomePageState extends State<UserHomePage> {
     );
   }
 
-  List<Widget> _buildStandardUserBookingStatus(Booking booking) {
+  List<Widget> _buildStandardUserBookingStatus(
+    Booking booking, {
+    bool showPayNow = true,
+  }) {
     switch (booking.status) {
       case BookingStatus.pending:
         return const [
@@ -1167,20 +1261,25 @@ class _UserHomePageState extends State<UserHomePage> {
           ),
         ];
       case BookingStatus.accepted:
-        return [
+        final widgets = <Widget>[
           const Text(
             'Vendor approved your request! Secure the slot with payment.',
             style: TextStyle(color: Colors.black87),
           ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton(
-              onPressed: () => _openPaymentPage(booking),
-              child: const Text('Pay now'),
-            ),
-          ),
         ];
+        if (showPayNow) {
+          widgets.add(const SizedBox(height: 8));
+          widgets.add(
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton(
+                onPressed: () => _openPaymentPage(booking),
+                child: const Text('Pay now'),
+              ),
+            ),
+          );
+        }
+        return widgets;
       case BookingStatus.paid:
         return _buildPaidUserBookingWidgets(booking);
     }
@@ -1564,7 +1663,22 @@ class _UserHomePageState extends State<UserHomePage> {
 
   void _openPaymentPage(Booking booking) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => BookingPaymentPage(booking: booking)),
+      MaterialPageRoute(
+        builder: (_) => BookingPaymentPage(booking: booking),
+      ),
+    );
+  }
+
+  void _openPaymentPageForOrder(List<Booking> bookings) {
+    if (bookings.isEmpty) return;
+    final primary = bookings.first;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BookingPaymentPage(
+          booking: primary,
+          orderBookings: bookings,
+        ),
+      ),
     );
   }
 
@@ -2706,11 +2820,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: Colors.indigo.shade100,
-                child: const Icon(Icons.storefront, color: Colors.indigo),
-              ),
+              _buildVendorAvatar(vendor.imageUrl),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -2835,6 +2945,49 @@ class _VendorHomePageState extends State<VendorHomePage> {
         ],
       ),
     );
+  }
+
+  Widget _buildVendorAvatar(String imageUrl) {
+    if (_isValidImageUrl(imageUrl)) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Image.network(
+          imageUrl,
+          height: 56,
+          width: 56,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _vendorAvatarFallback(),
+          loadingBuilder: (_, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return const SizedBox(
+              height: 56,
+              width: 56,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            );
+          },
+        ),
+      );
+    }
+    return _vendorAvatarFallback();
+  }
+
+  Widget _vendorAvatarFallback() {
+    return Container(
+      height: 56,
+      width: 56,
+      decoration: BoxDecoration(
+        color: Colors.indigo.shade100,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      alignment: Alignment.center,
+      child: const Icon(Icons.storefront, color: Colors.indigo),
+    );
+  }
+
+  bool _isValidImageUrl(String value) {
+    if (value.isEmpty) return false;
+    final uri = Uri.tryParse(value);
+    return uri != null && uri.hasScheme && uri.hasAuthority;
   }
 
   Widget _buildVendorStatChip({

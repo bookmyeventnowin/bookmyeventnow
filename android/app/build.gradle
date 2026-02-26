@@ -13,15 +13,30 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace "com.yourcompany.bookmyeventnow"
+    namespace "com.bookmyeventnow.app"
     compileSdkVersion 35
 
+    flavorDimensions "env"
+
+    productFlavors {
+        dev {
+            dimension "env"
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+        }
+        prod {
+            dimension "env"
+        }
+    }
+
     defaultConfig {
-        applicationId "com.yourcompany.bookmyeventnow"
+        applicationId "com.bookmyeventnow.app"
         minSdkVersion 23
         targetSdkVersion 35
-        versionCode 1
-        versionName "1.0.0"
+        // Bump these when uploading a new version to Play Console.
+        // Version code must be a unique integer per release.
+        versionCode 11
+        versionName "2.0.2"
     }
 
     // Align Java and Kotlin to the same JVM target
@@ -53,6 +68,26 @@ android {
                 }
             }
         }
+        debug {
+            if (keystoreProperties["storeFile"]) {
+                // Use the same upload key as release so Firebase/Google Sign-In
+                // sees the same SHA-1 for local debug builds and Play builds.
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+            } else {
+                // Fallback to the standard debug keystore if no custom keystore
+                // is configured on this machine.
+                def debugKeystore = file("${System.properties['user.home']}/.android/debug.keystore")
+                if (debugKeystore.exists()) {
+                    storeFile debugKeystore
+                    storePassword "android"
+                    keyAlias "androiddebugkey"
+                    keyPassword "android"
+                }
+            }
+        }
     }
 
     buildTypes {
@@ -65,13 +100,9 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            // Do not use release signing for debug builds. This avoids
-            // failures like: "SigningConfig \"release\" is missing required property \"storeFile\""
-            // when no keystore is configured locally.
-            // The Android Gradle Plugin provides a default debug keystore.
-            // If you intentionally want custom debug signing, define a
-            // separate debug signingConfig and reference it here.
-            // signingConfig signingConfigs.debug
+            // Sign debug builds with the debug signing config so that
+            // local/emulator builds use the same upload key when available.
+            signingConfig signingConfigs.debug
         }
     }
 }
@@ -84,19 +115,65 @@ dependencies {
 // build/app/outputs/flutter-apk so older tooling or certain commands can find it.
 afterEvaluate {
     def projectRoot = rootProject.projectDir.parentFile
-    def legacyOutDir = new File("${projectRoot}/build/app/outputs/flutter-apk")
-    def copyApk = { variantName, buildType ->
+    def legacyApkDir = new File("${projectRoot}/build/app/outputs/flutter-apk")
+    def legacyBundleDir = new File("${projectRoot}/build/app/outputs/bundle")
+
+    def latestArtifact = { List<File> searchDirs, String extension ->
+        def candidates = [] as List<File>
+        searchDirs.each { dir ->
+            if (dir.exists()) {
+                candidates.addAll(dir.listFiles()?.findAll { it.name.endsWith(extension) } ?: [])
+            }
+        }
+        return candidates.isEmpty() ? null : candidates.sort { -it.lastModified() }[0]
+    }
+
+    def copyApk = { variant ->
         try {
-            def candidates = [] as List<File>
-            def dir1 = new File("${buildDir}/outputs/flutter-apk")
-            def dir2 = new File("${buildDir}/outputs/apk/${buildType}")
-            if (dir1.exists()) { candidates.addAll(dir1.listFiles()?.findAll { it.name.endsWith('.apk') } ?: []) }
-            if (dir2.exists()) { candidates.addAll(dir2.listFiles()?.findAll { it.name.endsWith('.apk') } ?: []) }
-            if (!candidates.isEmpty()) {
-                def src = candidates.sort { -it.lastModified() }[0]
-                legacyOutDir.mkdirs()
-                def dest = new File(legacyOutDir, "app-${buildType}.apk")
-                ant.copy(file: src, tofile: dest, overwrite: true)
+            def buildType = variant.buildType.name
+            def variantName = variant.name
+            def baseName = variant.baseName
+            def flavorName = variant.flavorName
+            def preferred = [
+                    new File("${buildDir}/outputs/flutter-apk/app-${baseName}.apk"),
+                    new File("${buildDir}/outputs/apk/${flavorName}/${buildType}/app-${baseName}.apk"),
+                    new File("${buildDir}/outputs/apk/${buildType}/app-${buildType}.apk"),
+            ]
+            def src = preferred.find { it.exists() }
+            if (src == null) {
+                src = latestArtifact(
+                        [new File("${buildDir}/outputs/flutter-apk"), new File("${buildDir}/outputs/apk/${buildType}")],
+                        ".apk"
+                )
+            }
+            if (src != null) {
+                legacyApkDir.mkdirs()
+                // Keep flavor-specific apk name so flutter tooling can discover flavored outputs.
+                ant.copy(file: src, tofile: new File(legacyApkDir, "app-${baseName}.apk"), overwrite: true)
+                // Keep plain build-type alias for non-flavor commands and backwards compatibility.
+                ant.copy(file: src, tofile: new File(legacyApkDir, "app-${buildType}.apk"), overwrite: true)
+            }
+        } catch (Exception ignored) { }
+    }
+
+    def copyBundle = { variant ->
+        try {
+            def buildType = variant.buildType.name
+            def variantName = variant.name
+            def baseName = variant.baseName
+            def preferred = [
+                    new File("${buildDir}/outputs/bundle/${variantName}/app-${baseName}.aab"),
+                    new File("${buildDir}/outputs/bundle/${buildType}/app-${buildType}.aab"),
+            ]
+            def src = preferred.find { it.exists() }
+            if (src == null) {
+                src = latestArtifact([new File("${buildDir}/outputs/bundle/${buildType}")], ".aab")
+            }
+            if (src != null) {
+                def destDir = new File(legacyBundleDir, buildType)
+                destDir.mkdirs()
+                ant.copy(file: src, tofile: new File(destDir, "app-${baseName}.aab"), overwrite: true)
+                ant.copy(file: src, tofile: new File(destDir, "app-${buildType}.aab"), overwrite: true)
             }
         } catch (Exception ignored) { }
     }
@@ -107,8 +184,12 @@ afterEvaluate {
         ["package${cap}", "assemble${cap}", "install${cap}"].each { t ->
             def taskRef = tasks.findByName(t)
             if (taskRef != null) {
-                taskRef.doLast { copyApk(variant.name, buildType) }
+                taskRef.doLast { copyApk(variant) }
             }
+        }
+        def bundleTask = tasks.findByName("bundle${cap}")
+        if (bundleTask != null) {
+            bundleTask.doLast { copyBundle(variant) }
         }
     }
 }

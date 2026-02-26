@@ -15,7 +15,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Option A: default (reads google-services.json)
   await Firebase.initializeApp();
-
   // Option B: if you used `flutterfire configure` you might do:
   // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 

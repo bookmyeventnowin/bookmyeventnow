@@ -12,8 +12,23 @@ const Color _backgroundCream = Color(0xFFFEFAF4);
 const Color _cardSurface = Colors.white;
 
 class BookingPaymentPage extends StatefulWidget {
+  /// Primary booking used for display (vendor, category, etc.).
+  ///
+  /// When [orderBookings] is provided, this is typically the first booking
+  /// in that logical order.
   final Booking booking;
-  const BookingPaymentPage({required this.booking, super.key});
+
+  /// Optional list of bookings that belong to the same logical order.
+  /// When provided, the payment amount and summary are calculated from
+  /// the combined total of these bookings, and payment completion updates
+  /// all of them to `paid`.
+  final List<Booking>? orderBookings;
+
+  const BookingPaymentPage({
+    required this.booking,
+    this.orderBookings,
+    super.key,
+  });
 
   @override
   State<BookingPaymentPage> createState() => _BookingPaymentPageState();
@@ -23,6 +38,21 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
   final BookingRepository _bookingRepository = BookingRepository();
   late final Razorpay _razorpay;
   bool _processing = false;
+
+  List<Booking> get _bookings {
+    final fromOrder = widget.orderBookings;
+    if (fromOrder == null || fromOrder.isEmpty) {
+      return <Booking>[widget.booking];
+    }
+    return fromOrder;
+  }
+
+  double get _combinedBaseAmount {
+    return _bookings.fold<double>(
+      0,
+      (sum, booking) => sum + booking.totalAmount,
+    );
+  }
 
   @override
   void initState() {
@@ -41,13 +71,15 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
 
   @override
   Widget build(BuildContext context) {
-    final booking = widget.booking;
-    final feeBreakdown = calculateFeeBreakdown(booking.totalAmount);
+    final bookings = _bookings;
+    final primary = bookings.first;
+    final feeBreakdown = calculateFeeBreakdown(_combinedBaseAmount);
     final total = feeBreakdown.totalWithFees;
     final itemTotal = feeBreakdown.base;
     final taxesAndFee = feeBreakdown.totalWithFees - feeBreakdown.base;
-    final price = booking.pricePerHour;
-    final timeRange = _formatTimeRange(booking);
+    final price = primary.pricePerHour;
+    final isMultiDate = bookings.length > 1;
+    final timeRange = isMultiDate ? null : _formatTimeRange(primary);
     return Scaffold(
       backgroundColor: _backgroundCream,
       appBar: AppBar(
@@ -79,15 +111,38 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _summaryRow('Vendor', booking.vendorName),
-                    _summaryRow('Category', booking.vendorCategory),
-                    _summaryRow('Event date', _formatDate(booking.eventDate)),
-                    if (timeRange != null)
-                      _summaryRow('Time window', timeRange),
-                    _summaryRow(
-                      'Duration',
-                      '${booking.hoursBooked} hr${booking.hoursBooked == 1 ? '' : 's'}',
-                    ),
+                    _summaryRow('Vendor', primary.vendorName),
+                    _summaryRow('Category', primary.vendorCategory),
+                    if (!isMultiDate) ...[
+                      _summaryRow(
+                        'Event date',
+                        _formatDate(primary.eventDate),
+                      ),
+                      if (timeRange != null)
+                        _summaryRow('Time window', timeRange),
+                      _summaryRow(
+                        'Duration',
+                        '${primary.hoursBooked} hr${primary.hoursBooked == 1 ? '' : 's'}',
+                      ),
+                    ] else ...[
+                      _summaryRow(
+                        'Event dates',
+                        '${bookings.length} slots',
+                      ),
+                      const SizedBox(height: 8),
+                      ...bookings.map((b) {
+                        final tr = _formatTimeRange(b);
+                        final hrs = b.hoursBooked;
+                        final timeLabel =
+                            tr != null ? ' | $tr ($hrs hr${hrs == 1 ? '' : 's'})' : '';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '- ${_formatDate(b.eventDate)}$timeLabel',
+                          ),
+                        );
+                      }),
+                    ],
                     _summaryRow('Rate per hour', _formatCurrency(price)),
                     const Divider(height: 28),
                     const Text(
@@ -153,8 +208,10 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
   }
 
   Future<void> _handlePayment() async {
-    final booking = widget.booking;
-    final amount = calculateFeeBreakdown(booking.totalAmount).totalWithFees;
+    if (_processing) return;
+    final bookings = _bookings;
+    final primary = bookings.first;
+    final amount = calculateFeeBreakdown(_combinedBaseAmount).totalWithFees;
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -170,9 +227,18 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
       'amount': (amount * 100).round(),
       'currency': 'INR',
       'name': 'BookMyEventNow',
-      'description': 'Booking payment',
-      'prefill': {'contact': booking.userEmail, 'email': booking.userEmail},
-      'notes': {'bookingId': booking.id, 'vendorId': booking.vendorId},
+      'description': bookings.length == 1
+          ? 'Booking payment'
+          : 'Booking payment for ${bookings.length} dates',
+      'prefill': {
+        'contact': primary.userEmail,
+        'email': primary.userEmail,
+      },
+      'notes': {
+        'bookingId': primary.id,
+        'vendorId': primary.vendorId,
+        if (bookings.length > 1) 'orderSize': bookings.length.toString(),
+      },
     };
 
     try {
@@ -188,11 +254,14 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
 
   Future<void> _completePayment(String paymentId) async {
     try {
-      await _bookingRepository.updateStatus(
-        bookingId: widget.booking.id,
-        status: BookingStatus.paid,
-        paymentReference: paymentId,
-      );
+      final bookings = _bookings;
+      for (final booking in bookings) {
+        await _bookingRepository.updateStatus(
+          bookingId: booking.id,
+          status: BookingStatus.paid,
+          paymentReference: paymentId,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Payment successful via Razorpay (Test)')),
