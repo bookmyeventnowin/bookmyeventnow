@@ -125,9 +125,6 @@ class _VendorListPageState extends State<VendorListPage> {
                   }
                 },
                 onViewDetails: () => _openVendorDetails(context, vendor),
-                ratingStream: _bookingRepository.streamVendorRatingSummary(
-                  vendor.id,
-                ),
               );
             },
           );
@@ -225,6 +222,9 @@ Future<void> startVendorBookingFlow({
   }
 
   final isCateringFlow = cateringProposal != null && _isCateringVendor(vendor);
+  // Group all slots selected in a single flow under one logical order.
+  final orderId =
+      '${user.uid}_${vendor.id}_${DateTime.now().millisecondsSinceEpoch}';
 
   final selection = await showModalBottomSheet<_BookingSelection>(
     context: context,
@@ -282,6 +282,7 @@ Future<void> startVendorBookingFlow({
           deliveryTime: slot.start,
           deliveryAddress: selection.deliveryAddress ?? '',
           deliveryRequired: selection.deliveryRequired,
+          orderId: orderId,
         );
       } else {
         await bookingRepository.createBooking(
@@ -298,6 +299,7 @@ Future<void> startVendorBookingFlow({
           startTime: slot.start,
           endTime: slot.end,
           eventDate: slot.eventDate,
+          orderId: orderId,
         );
       }
     }
@@ -359,150 +361,146 @@ class _VendorCard extends StatelessWidget {
     required this.vendor,
     required this.onBook,
     required this.onViewDetails,
-    required this.ratingStream,
   });
 
   final Vendor vendor;
   final VoidCallback onBook;
   final VoidCallback onViewDetails;
-  final Stream<RatingSummary> ratingStream;
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<RatingSummary>(
-      stream: ratingStream,
-      initialData: RatingSummary.empty,
-      builder: (context, snapshot) {
-        final ratingSummary = snapshot.data ?? RatingSummary.empty;
-        return Card(
-          color: _vendorCardBackground,
-          surfaceTintColor: _vendorCardBackground,
-          elevation: 2,
-          shadowColor: Colors.black.withValues(alpha: 0.12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onViewDetails,
-            child: Padding(
-              padding: const EdgeInsets.all(22),
-              child: Column(
+    return Card(
+      color: _vendorCardBackground,
+      surfaceTintColor: _vendorCardBackground,
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onViewDetails,
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _VendorAvatar(imageUrl: vendor.imageUrl),
-                      const SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  _VendorAvatar(imageUrl: vendor.imageUrl),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          vendor.name,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: _vendorPrimaryText,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          vendor.type.isNotEmpty ? vendor.type : 'Vendor',
+                          style: const TextStyle(
+                            color: _vendorSecondaryText,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              vendor.name,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                color: _vendorPrimaryText,
+                            if (vendor.ratingCount > 0) ...[
+                              const Icon(
+                                Icons.star,
+                                size: 16,
+                                color: Colors.amber,
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              vendor.type.isNotEmpty ? vendor.type : 'Vendor',
-                              style: const TextStyle(
+                              const SizedBox(width: 4),
+                              Text(
+                                _formatVendorRating(vendor),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: _vendorPrimaryText,
+                                ),
+                              ),
+                            ] else ...[
+                              const Icon(
+                                Icons.star_border,
+                                size: 16,
                                 color: _vendorSecondaryText,
-                                fontWeight: FontWeight.w500,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (ratingSummary.hasRatings) ...[
-                                  const Icon(
-                                    Icons.star,
-                                    size: 16,
-                                    color: Colors.amber,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${ratingSummary.average!.toStringAsFixed(1)} (${ratingSummary.count})',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: _vendorPrimaryText,
-                                    ),
-                                  ),
-                                ] else ...[
-                                  const Icon(
-                                    Icons.star_border,
-                                    size: 16,
-                                    color: _vendorSecondaryText,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Text(
-                                    'No ratings yet',
-                                    style: TextStyle(
-                                      color: _vendorSecondaryText,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
+                              const SizedBox(width: 4),
+                              const Text(
+                                'No ratings yet',
+                                style: TextStyle(
+                                  color: _vendorSecondaryText,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton.icon(
-                        onPressed: onBook,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _vendorButtonColor,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                        ),
-                        icon: const Icon(Icons.event_available_outlined),
-                        label: const Text('Book'),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  _VendorFacts(vendor: vendor),
-                  if (vendor.occasions.isNotEmpty ||
-                      vendor.moreDetails.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    if (vendor.occasions.isNotEmpty)
-                      Text(
-                        'Occasions: ${vendor.occasions.join(', ')}',
-                        style: const TextStyle(
-                          color: _vendorSecondaryText,
-                          fontWeight: FontWeight.w500,
-                        ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    onPressed: onBook,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _vendorButtonColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
                       ),
-                    if (vendor.moreDetails.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        vendor.moreDetails,
-                        style: const TextStyle(color: _vendorSecondaryText),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
                       ),
-                    ],
-                  ],
+                    ),
+                    icon: const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 16,
+                    ),
+                    label: const Text(
+                      'Book',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
                 ],
               ),
-            ),
+              const SizedBox(height: 16),
+              _VendorFacts(vendor: vendor),
+              if (vendor.occasions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Occasions: ${vendor.occasions.join(', ')}',
+                  style: const TextStyle(
+                    color: _vendorSecondaryText,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
+}
+
+String _formatVendorRating(Vendor vendor) {
+  final average = vendor.ratingAverage > 0
+      ? vendor.ratingAverage
+      : (vendor.ratingCount > 0 ? vendor.ratingTotal / vendor.ratingCount : 0);
+  if (average <= 0) return 'No ratings yet';
+  return '${average.toStringAsFixed(1)} (${vendor.ratingCount})';
 }
 
 bool _isDecorationVendor(Vendor vendor) {

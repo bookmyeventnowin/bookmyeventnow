@@ -51,12 +51,37 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:675236501670:android:cb1850f6594f137661fc67",
+        "mobilesdk_app_id": "1:675236501670:android:9de317fa68368b4d61fc67",
         "android_client_info": {
-          "package_name": "com.yourcompany.bookmyeventnow"
+          "package_name": "com.bookmyeventnow.app.dev"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "675236501670-hcsjisr8n5oc50i7qfccvq2n1qo046kq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bookmyeventnow.app.dev",
+            "certificate_hash": "264cf29331c4570621fc53c7aec2b249f1c1a617"
+          }
+        },
+        {
+          "client_id": "675236501670-ogsuk5nac6atcf80415m6rev89gmgc5t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bookmyeventnow.app.dev",
+            "certificate_hash": "7d29b936ea28dc89ad8aa4a779bd0f2e386af2e4"
+          }
+        },
+        {
+          "client_id": "675236501670-unpjh23e2g8k7970jlsecd7hhqhoolai.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bookmyeventnow.app.dev",
+            "certificate_hash": "96affab76b158f5ad214a9df3c9748869657b71f"
+          }
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDSRekI0FJK8w2Ye4A5IBbmduPhJ860is4"

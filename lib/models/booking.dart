@@ -76,6 +76,9 @@ extension BookingStatusDisplay on BookingStatus {
 
 class Booking {
   final String id;
+  // Logical group identifier for multiple slots booked in one user flow.
+  // If null, the booking is treated as its own order.
+  final String? orderId;
   final String userId;
   final String userName;
   final String userEmail;
@@ -110,6 +113,7 @@ class Booking {
 
   const Booking({
     required this.id,
+    required this.orderId,
     required this.userId,
     required this.userName,
     required this.userEmail,
@@ -145,8 +149,10 @@ class Booking {
 
   factory Booking.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const <String, dynamic>{};
+    final rawOrderId = (data['orderId'] as String?)?.trim();
     return Booking(
       id: doc.id,
+      orderId: (rawOrderId != null && rawOrderId.isNotEmpty) ? rawOrderId : doc.id,
       userId: (data['userId'] as String?)?.trim() ?? '',
       userName: (data['userName'] as String?)?.trim() ?? '',
       userEmail: (data['userEmail'] as String?)?.trim() ?? '',
@@ -188,6 +194,7 @@ class Booking {
 
   Map<String, dynamic> toFirestore() {
     return {
+      'orderId': orderId,
       'userId': userId,
       'userName': userName,
       'userEmail': userEmail,
@@ -230,6 +237,7 @@ class Booking {
 
   Booking copyWith({
     String? id,
+    String? orderId,
     String? userId,
     String? userName,
     String? userEmail,
@@ -264,6 +272,7 @@ class Booking {
   }) {
     return Booking(
       id: id ?? this.id,
+      orderId: orderId ?? this.orderId,
       userId: userId ?? this.userId,
       userName: userName ?? this.userName,
       userEmail: userEmail ?? this.userEmail,

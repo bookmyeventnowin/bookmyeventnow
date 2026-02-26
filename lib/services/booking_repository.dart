@@ -80,11 +80,13 @@ class BookingRepository {
     required DateTime startTime,
     required DateTime endTime,
     required DateTime eventDate,
+    String? orderId,
   }) async {
     final duration = endTime.difference(startTime);
     final hours = (duration.inMinutes / 60).ceil().clamp(1, 24);
     final totalAmount = pricePerHour * hours;
     final docRef = await _collection.add({
+      'orderId': orderId,
       'userId': userId,
       'userName': userName,
       'userEmail': userEmail,
@@ -122,10 +124,12 @@ class BookingRepository {
     required DateTime deliveryTime,
     required String deliveryAddress,
     required bool deliveryRequired,
+    String? orderId,
   }) async {
     final duration = endTime.difference(startTime);
     final hours = (duration.inMinutes / 60).ceil().clamp(1, 24);
     final docRef = await _collection.add({
+      'orderId': orderId,
       'userId': userId,
       'userName': userName,
       'userEmail': userEmail,
@@ -279,11 +283,65 @@ class BookingRepository {
     required int rating,
     String? review,
   }) async {
-    await _collection.doc(bookingId).update({
-      'rating': rating,
-      'review': review,
-      'ratedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+    await _firestore.runTransaction((transaction) async {
+      final bookingRef = _collection.doc(bookingId);
+      final bookingSnap = await transaction.get(bookingRef);
+      if (!bookingSnap.exists) {
+        throw Exception('Booking not found');
+      }
+      final data = bookingSnap.data()!;
+      final vendorId = data['vendorId'] as String? ?? '';
+      final previousRatingRaw = data['rating'];
+      final previousRating =
+          previousRatingRaw is num ? previousRatingRaw.toDouble() : null;
+
+      DocumentReference<Map<String, dynamic>>? vendorRef;
+      DocumentSnapshot<Map<String, dynamic>>? vendorSnap;
+      if (vendorId.isNotEmpty) {
+        vendorRef = _firestore.collection('vendors').doc(vendorId);
+        vendorSnap = await transaction.get(vendorRef);
+      }
+
+      double currentTotal = 0;
+      int currentCount = 0;
+      if (vendorSnap != null && vendorSnap.exists) {
+        final vendorData = vendorSnap.data();
+        if (vendorData != null) {
+          final totalRaw = vendorData['ratingTotal'];
+          final countRaw = vendorData['ratingCount'];
+          if (totalRaw is num) currentTotal = totalRaw.toDouble();
+          if (countRaw is num) currentCount = countRaw.toInt();
+        }
+      }
+
+      double newTotal = currentTotal;
+      int newCount = currentCount;
+      if (previousRating != null && previousRating > 0) {
+        newTotal -= previousRating;
+      } else {
+        newCount += 1;
+      }
+      newTotal += rating.toDouble();
+      final newAverage = newCount > 0 ? newTotal / newCount : 0;
+
+      transaction.update(bookingRef, {
+        'rating': rating,
+        'review': review,
+        'ratedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      if (vendorRef != null) {
+        transaction.set(
+          vendorRef,
+          {
+            'ratingTotal': newTotal,
+            'ratingCount': newCount,
+            'ratingAverage': newAverage,
+          },
+          SetOptions(merge: true),
+        );
+      }
     });
   }
 
