@@ -47,6 +47,17 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  # ── Test Utilities ───────────────────────────────────────────────────────
+  # Fake Firestore for unit-testing repositories without a real Firebase project
+  fake_cloud_firestore: ^3.0.3
+  # Mock Firebase Auth for testing login flows without real credentials
+  firebase_auth_mocks: ^0.14.1
+  # Mock Google Sign-In for auth flow tests
+  google_sign_in_mocks: ^0.3.1
+
   flutter_launcher_icons: ^0.14.1
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
