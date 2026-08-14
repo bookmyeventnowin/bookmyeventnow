@@ -1,0 +1,42 @@
+{
+  "run_at": "2026-03-11 04:46:19",
+  "story": "KAN-1",
+  "suite": "smoke",
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "pass_rate": "100%",
+  "total_duration_sec": 47.22,
+  "results": [
+    {
+      "id": "TC_SMOKE_001",
+      "status": "PASSED",
+      "duration": 4.21
+    },
+    {
+      "id": "TC_SMOKE_002",
+      "status": "PASSED",
+      "duration": 6.87
+    },
+    {
+      "id": "TC_SMOKE_003",
+      "status": "PASSED",
+      "duration": 5.43
+    },
+    {
+      "id": "TC_SMOKE_004",
+      "status": "PASSED",
+      "duration": 3.15
+    },
+    {
+      "id": "TC_SMOKE_005",
+      "status": "PASSED",
+      "duration": 8.92
+    },
+    {
+      "id": "TC_SMOKE_006",
+      "status": "PASSED",
+      "duration": 18.64
+    }
+  ]
+}

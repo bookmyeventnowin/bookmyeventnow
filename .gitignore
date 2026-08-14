@@ -12,6 +12,15 @@
 .swiftpm/
 migrate_working_dir/
 
+# Local build/cache artifacts — never commit these
+.tmp/
+flutter/
+pub-cache/
+base/
+build_log.txt
+pubspec.yaml.bak
+upload-key.pem
+
 # IntelliJ related
 *.iml
 *.ipr

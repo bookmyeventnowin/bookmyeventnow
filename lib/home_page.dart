@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -176,6 +177,111 @@ class _UserHomePageState extends State<UserHomePage> {
     await UserRoleStorage.instance.clearRole(widget.user.uid);
     await FirebaseAuth.instance.signOut();
     await GoogleSignIn().signOut();
+  }
+
+  Future<void> _onDeleteAccountPressed() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete account'),
+          content: const Text(
+            'Are you sure you want to delete your account? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) {
+        return const AlertDialog(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.4),
+              ),
+              SizedBox(width: 12),
+              Expanded(child: Text('Deleting your account...')),
+            ],
+          ),
+        );
+      },
+    );
+
+    var requiresRecentLogin = false;
+    try {
+      final uid = widget.user.uid;
+      final firestore = FirebaseFirestore.instance;
+
+      // Keep a deletion marker in profile for audit/fallback.
+      await firestore.collection('profiles').doc(uid).set({
+        'isDeleted': true,
+        'deletedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Best-effort hard delete of profile document.
+      try {
+        await firestore.collection('profiles').doc(uid).delete();
+      } catch (_) {
+        // Security rules may block deletes; marker above is retained.
+      }
+
+      await UserRoleStorage.instance.clearRole(uid);
+
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser != null && authUser.uid == uid) {
+        try {
+          await authUser.delete();
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'requires-recent-login') {
+            requiresRecentLogin = true;
+          } else {
+            rethrow;
+          }
+        }
+      }
+
+      await FirebaseAuth.instance.signOut();
+      await GoogleSignIn().signOut();
+
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            requiresRecentLogin
+                ? 'Profile removed. Sign in again once to complete auth account deletion.'
+                : 'Account deleted successfully.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete account: $e')));
+    }
   }
 
   @override
@@ -472,13 +578,25 @@ class _UserHomePageState extends State<UserHomePage> {
                       isSelectable: true,
                     ),
                     const SizedBox(height: 24),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.logout),
-                        label: const Text('Log out'),
-                        onPressed: _signOut,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.logout),
+                          label: const Text('Log out'),
+                          onPressed: _signOut,
+                        ),
+                        const SizedBox(width: 10),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Delete account'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red.shade700,
+                            side: BorderSide(color: Colors.red.shade300),
+                          ),
+                          onPressed: _onDeleteAccountPressed,
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -957,8 +1075,7 @@ class _UserHomePageState extends State<UserHomePage> {
   Widget _buildUserBookingsCard(List<Booking> bookings, bool isLoading) {
     // Group bookings by a logical order id so that multiple dates selected
     // in a single flow appear as one order to the user.
-    final Map<String, List<Booking>> groupedByOrder =
-        <String, List<Booking>>{};
+    final Map<String, List<Booking>> groupedByOrder = <String, List<Booking>>{};
     for (final booking in bookings) {
       final key = booking.orderId ?? booking.id;
       groupedByOrder.putIfAbsent(key, () => <Booking>[]).add(booking);
@@ -1056,10 +1173,11 @@ class _UserHomePageState extends State<UserHomePage> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: bookingsInOrder.map((booking) {
-                            final total =
-                                _formatCurrency(booking.totalAmount);
-                            final timeRange =
-                                _formatBookingTimeRange(context, booking);
+                            final total = _formatCurrency(booking.totalAmount);
+                            final timeRange = _formatBookingTimeRange(
+                              context,
+                              booking,
+                            );
                             final hours = _hoursForBooking(booking);
                             final isCatering = booking.isCateringProposal;
                             final statusWidgets = isCatering
@@ -1070,8 +1188,7 @@ class _UserHomePageState extends State<UserHomePage> {
                                   );
 
                             return Padding(
-                              padding:
-                                  const EdgeInsets.only(bottom: 12.0),
+                              padding: const EdgeInsets.only(bottom: 12.0),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1131,8 +1248,7 @@ class _UserHomePageState extends State<UserHomePage> {
                                         amount: booking.totalAmount,
                                         settlementLabel: 'Estimate amount',
                                         formatCurrency: _formatCurrency,
-                                        onInfoTap: () =>
-                                            showFeeBreakdownDialog(
+                                        onInfoTap: () => showFeeBreakdownDialog(
                                           context: context,
                                           breakdown: _calculateFees(
                                             booking.totalAmount,
@@ -1143,8 +1259,7 @@ class _UserHomePageState extends State<UserHomePage> {
                                     ),
                                   if (isCatering) ...[
                                     if (booking.proposalDeliveryRequired &&
-                                        (booking.proposalDeliveryAddress ??
-                                                '')
+                                        (booking.proposalDeliveryAddress ?? '')
                                             .isNotEmpty)
                                       Text(
                                         'Delivery address: ${booking.proposalDeliveryAddress}',
@@ -1155,10 +1270,7 @@ class _UserHomePageState extends State<UserHomePage> {
                                       ),
                                     if (booking.proposalDeliveryTime != null)
                                       Text(
-                                        'Delivery time: ${_formatDeliveryDateTime(
-                                          context,
-                                          booking.proposalDeliveryTime!,
-                                        )}',
+                                        'Delivery time: ${_formatDeliveryDateTime(context, booking.proposalDeliveryTime!)}',
                                       ),
                                   ],
                                   const SizedBox(height: 12),
@@ -1184,7 +1296,7 @@ class _UserHomePageState extends State<UserHomePage> {
                             if (payable.isEmpty) return const SizedBox();
                             final combinedAmount = payable.fold<double>(
                               0,
-                              (sum, b) => sum + b.totalAmount,
+                              (total, b) => total + b.totalAmount,
                             );
                             return Align(
                               alignment: Alignment.centerRight,
@@ -1199,9 +1311,8 @@ class _UserHomePageState extends State<UserHomePage> {
                                   ),
                                   const SizedBox(height: 8),
                                   ElevatedButton(
-                                    onPressed: () => _openPaymentPageForOrder(
-                                      payable,
-                                    ),
+                                    onPressed: () =>
+                                        _openPaymentPageForOrder(payable),
                                     child: const Text('Pay now'),
                                   ),
                                 ],
@@ -1663,9 +1774,7 @@ class _UserHomePageState extends State<UserHomePage> {
 
   void _openPaymentPage(Booking booking) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => BookingPaymentPage(booking: booking),
-      ),
+      MaterialPageRoute(builder: (_) => BookingPaymentPage(booking: booking)),
     );
   }
 
@@ -1674,10 +1783,8 @@ class _UserHomePageState extends State<UserHomePage> {
     final primary = bookings.first;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => BookingPaymentPage(
-          booking: primary,
-          orderBookings: bookings,
-        ),
+        builder: (_) =>
+            BookingPaymentPage(booking: primary, orderBookings: bookings),
       ),
     );
   }

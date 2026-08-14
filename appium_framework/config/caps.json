@@ -1,0 +1,43 @@
+{
+  "android": {
+    "platformName": "Android",
+    "deviceName": "Android Emulator",
+    "platformVersion": "13.0",
+    "appPackage": "com.bookmyeventnow.app",
+    "appActivity": "com.bookmyeventnow.app.ui.splash.SplashActivity",
+    "automationName": "UiAutomator2",
+    "noReset": false,
+    "fullReset": false,
+    "newCommandTimeout": 300,
+    "autoGrantPermissions": true,
+    "unicodeKeyboard": true,
+    "resetKeyboard": true,
+    "adbExecTimeout": 60000
+  },
+  "appium_server": {
+    "host": "127.0.0.1",
+    "port": 4723,
+    "base_path": "/wd/hub"
+  },
+  "test_data": {
+    "valid_user": {
+      "email": "testuser@bookmyeventnow.com",
+      "password": "Test@1234"
+    },
+    "invalid_user": {
+      "email": "invalid@test.com",
+      "password": "WrongPass"
+    },
+    "booking": {
+      "venue_name": "City Community Hall",
+      "check_in_date": "2026-04-01",
+      "check_out_date": "2026-04-03",
+      "guest_count": 100
+    }
+  },
+  "timeouts": {
+    "implicit_wait": 10,
+    "explicit_wait": 20,
+    "page_load_timeout": 30
+  }
+}

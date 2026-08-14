@@ -1,0 +1,23 @@
+# BookMyEvent Now — Appium + Python Test Framework
+# Install: pip install -r requirements.txt
+
+# Core Appium
+Appium-Python-Client==3.1.0
+
+# Test Runner
+pytest==8.1.1
+pytest-html==4.1.1
+pytest-ordering==0.6
+pytest-timeout==2.3.1
+
+# Allure Reporting (optional but recommended)
+allure-pytest==2.13.3
+
+# Selenium (Appium extends Selenium)
+selenium==4.19.0
+
+# Utilities
+python-dotenv==1.0.1
+
+# Type hints support
+typing-extensions==4.11.0

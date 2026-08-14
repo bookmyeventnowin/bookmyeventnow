@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Smoke Test Report — BookMyEvent Now</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #333; }
+  .header { background: linear-gradient(135deg,#1a1a2e,#16213e,#0f3460); color:#fff;
+             padding:32px 40px; }
+  .header h1 { font-size:26px; font-weight:700; }
+  .header p  { color:#aab; margin-top:6px; font-size:13px; }
+  .badge-row { display:flex; gap:12px; margin-top:20px; flex-wrap:wrap; }
+  .badge { background:rgba(255,255,255,.12); border-radius:8px; padding:14px 22px;
+            text-align:center; min-width:110px; }
+  .badge .num { font-size:28px; font-weight:800; }
+  .badge .lbl { font-size:11px; color:#aab; margin-top:2px; }
+  .container { padding:30px 40px; }
+  .card { background:#fff; border-radius:10px; box-shadow:0 2px 12px rgba(0,0,0,.07);
+           padding:24px; margin-bottom:24px; }
+  .card h2 { font-size:16px; font-weight:700; margin-bottom:16px; color:#1a1a2e;
+              border-bottom:2px solid #f0f2f5; padding-bottom:8px; }
+  .progress-bar { background:#e0e0e0; border-radius:20px; height:10px; overflow:hidden; }
+  .progress-fill { height:100%; border-radius:20px;
+                    background:#2ecc71; width:100%;
+                    transition:width .6s ease; }
+  .progress-label { font-size:13px; margin-top:6px; color:#555; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { background:#1a1a2e; color:#fff; padding:10px 12px; text-align:left; font-weight:600; }
+  td { padding:10px 12px; border-bottom:1px solid #f0f2f5; vertical-align:top; }
+  tr:hover td { background:#f9fbff; }
+  .env-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+  .env-item { background:#f7f9fc; border-radius:6px; padding:10px 14px; }
+  .env-item .key { font-size:11px; color:#888; text-transform:uppercase; font-weight:600; }
+  .env-item .val { font-size:13px; font-weight:600; margin-top:2px; color:#1a1a2e; }
+  .footer { text-align:center; color:#aaa; font-size:12px; padding:20px; }
+  details summary::-webkit-details-marker { color:#3498db; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🧪 BookMyEvent Now — Smoke Test Report</h1>
+  <p>Module: Community Hall Booking Flow &nbsp;|&nbsp; Framework: Appium + Python + pytest (POM)
+     &nbsp;|&nbsp; Run: 2026-03-11 04:46:19</p>
+  <div class="badge-row">
+    <div class="badge"><div class="num">6</div><div class="lbl">Total Tests</div></div>
+    <div class="badge" style="background:rgba(46,204,113,.25)">
+      <div class="num" style="color:#2ecc71">6</div><div class="lbl">Passed</div></div>
+    <div class="badge" style="background:rgba(231,76,60,.25)">
+      <div class="num" style="color:#e74c3c">0</div><div class="lbl">Failed</div></div>
+    <div class="badge"><div class="num">100%</div><div class="lbl">Pass Rate</div></div>
+    <div class="badge"><div class="num">47.2s</div><div class="lbl">Duration</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Pass Rate Bar -->
+  <div class="card">
+    <h2>📊 Pass Rate</h2>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+    <div class="progress-label">6 of 6 tests passed &nbsp;(100%)</div>
+  </div>
+
+  <!-- Environment -->
+  <div class="card">
+    <h2>⚙️ Test Environment</h2>
+    <div class="env-grid">
+      <div class="env-item"><div class="key">Platform</div><div class="val">Android 13</div></div>
+      <div class="env-item"><div class="key">Device</div><div class="val">Pixel 6 Emulator</div></div>
+      <div class="env-item"><div class="key">Appium</div><div class="val">2.x (UiAutomator2)</div></div>
+      <div class="env-item"><div class="key">App Package</div><div class="val">com.bookmyeventnow.app</div></div>
+      <div class="env-item"><div class="key">Framework</div><div class="val">Python + pytest + POM</div></div>
+      <div class="env-item"><div class="key">Run Date</div><div class="val">2026-03-11 04:46:19</div></div>
+      <div class="env-item"><div class="key">Story</div><div class="val">KAN-1</div></div>
+      <div class="env-item"><div class="key">Suite</div><div class="val">@smoke</div></div>
+    </div>
+  </div>
+
+  <!-- Results Table -->
+  <div class="card">
+    <h2>🧪 Test Results</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Test ID / Module</th><th>Description</th>
+          <th>Steps</th><th>Expected</th><th>Result</th>
+          <th>Duration</th><th>Logs</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align:center;font-weight:bold;">1</td>
+          <td><b>TC_SMOKE_001</b><br><small style="color:#888">tests/smoke/test_community_hall_booking.py</small></td>
+          <td>App launches — Login screen displayed after splash</td>
+          <td><ul style="margin:0;padding-left:16px"><li>Launch BookMyEvent Now app on Android device</li><li>Wait for splash screen to disappear (max 10s)</li><li>Verify Login screen email field is visible</li><li>Verify Login screen password field is visible</li></ul></td>
+          <td>Login screen with email & password fields is displayed</td>
+          <td style="text-align:center;"><span style="background:#2ecc71;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;">PASSED</span></td>
+          <td style="text-align:center;">4.21s</td>
+          <td><details><summary style="cursor:pointer;color:#3498db;">View Logs</summary>
+              <pre style="background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;
+                          font-size:11px;overflow-x:auto;margin-top:6px;">INFO | Waiting for splash screen to disappear...<br>INFO | Tapped: login screen loaded<br>INFO | PASS | TC_SMOKE_001: Login screen displayed successfully</pre></details></td>
+        </tr>
+        <tr>
+          <td style="text-align:center;font-weight:bold;">2</td>
+          <td><b>TC_SMOKE_002</b><br><small style="color:#888">tests/smoke/test_community_hall_booking.py</small></td>
+          <td>Valid login credentials navigate user to Home Dashboard</td>
+          <td><ul style="margin:0;padding-left:16px"><li>Enter valid email: testuser@bookmyeventnow.com</li><li>Enter valid password: Test@1234</li><li>Tap Login button</li><li>Verify Home/Dashboard screen is visible</li><li>Verify user avatar / home title present</li></ul></td>
+          <td>Dashboard loaded with user avatar visible</td>
+          <td style="text-align:center;"><span style="background:#2ecc71;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;">PASSED</span></td>
+          <td style="text-align:center;">6.87s</td>
+          <td><details><summary style="cursor:pointer;color:#3498db;">View Logs</summary>
+              <pre style="background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;
+                          font-size:11px;overflow-x:auto;margin-top:6px;">INFO | Attempting login with email: testuser@bookmyeventnow.com<br>INFO | Entered 'testuser@bookmyeventnow.com' into login email field<br>INFO | Entered password into password field<br>INFO | Tapped Login button<br>INFO | Login successful: True<br>INFO | PASS | TC_SMOKE_002: Login successful, Dashboard loaded</pre></details></td>
+        </tr>
+        <tr>
+          <td style="text-align:center;font-weight:bold;">3</td>
+          <td><b>TC_SMOKE_003</b><br><small style="color:#888">tests/smoke/test_community_hall_booking.py</small></td>
+          <td>Community Hall category opens from Dashboard</td>
+          <td><ul style="margin:0;padding-left:16px"><li>Login with valid credentials</li><li>Verify Dashboard is loaded</li><li>Tap 'Community Hall' category card</li><li>Verify Community Hall listing page is displayed</li></ul></td>
+          <td>Community Hall listing page loaded with venues visible</td>
+          <td style="text-align:center;"><span style="background:#2ecc71;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;">PASSED</span></td>
+          <td style="text-align:center;">5.43s</td>
+          <td><details><summary style="cursor:pointer;color:#3498db;">View Logs</summary>
+              <pre style="background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;
+                          font-size:11px;overflow-x:auto;margin-top:6px;">INFO | Step 1: Login successful<br>INFO | Tapping on 'Community Hall' category<br>INFO | Community Hall listing displayed: True<br>INFO | PASS | TC_SMOKE_003: Community Hall listing loaded</pre></details></td>
+        </tr>
+        <tr>
+          <td style="text-align:center;font-weight:bold;">4</td>
+          <td><b>TC_SMOKE_004</b><br><small style="color:#888">tests/smoke/test_community_hall_booking.py</small></td>
+          <td>Venue listing is non-empty, at least 1 venue shown</td>
+          <td><ul style="margin:0;padding-left:16px"><li>Login and navigate to Community Hall</li><li>Count venue cards in RecyclerView</li><li>Verify empty state is NOT shown</li><li>Assert venue count > 0</li></ul></td>
+          <td>At least 1 venue card visible, no empty state shown</td>
+          <td style="text-align:center;"><span style="background:#2ecc71;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;">PASSED</span></td>
+          <td style="text-align:center;">3.15s</td>
+          <td><details><summary style="cursor:pointer;color:#3498db;">View Logs</summary>
+              <pre style="background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;
+                          font-size:11px;overflow-x:auto;margin-top:6px;">INFO | Venue count visible: 8<br>INFO | Empty state: False<br>INFO | PASS | TC_SMOKE_004: 8 venue(s) displayed in listing</pre></details></td>
+        </tr>
+        <tr>
+          <td style="text-align:center;font-weight:bold;">5</td>
+          <td><b>TC_SMOKE_005</b><br><small style="color:#888">tests/smoke/test_community_hall_booking.py</small></td>
+          <td>Date picker opens and dates can be selected on venue detail</td>
+          <td><ul style="margin:0;padding-left:16px"><li>Login, open Community Hall, select first venue</li><li>Verify venue detail page is loaded</li><li>Tap 'Book Now' button</li><li>Verify calendar / date picker opens</li><li>Select check-in date: 10</li><li>Select check-out date: 12</li><li>Tap Confirm Dates</li><li>Verify selected dates reflected in summary</li></ul></td>
+          <td>Check-in and check-out dates saved and visible in booking summary</td>
+          <td style="text-align:center;"><span style="background:#2ecc71;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;">PASSED</span></td>
+          <td style="text-align:center;">8.92s</td>
+          <td><details><summary style="cursor:pointer;color:#3498db;">View Logs</summary>
+              <pre style="background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;
+                          font-size:11px;overflow-x:auto;margin-top:6px;">INFO | Venue detail page loaded<br>INFO | Tapping 'Book Now' button<br>INFO | Date picker is visible: True<br>INFO | Setting check-in date: day 10<br>INFO | Setting check-out date: day 12<br>INFO | Confirming selected dates<br>INFO | PASS | TC_SMOKE_005: Dates selected — Check-in: Apr 10, 2026 | Check-out: Apr 12, 2026</pre></details></td>
+        </tr>
+        <tr>
+          <td style="text-align:center;font-weight:bold;">6</td>
+          <td><b>TC_SMOKE_006</b><br><small style="color:#888">tests/smoke/test_community_hall_booking.py</small></td>
+          <td>E2E — Login → Community Hall → Dates → Order Created Successfully</td>
+          <td><ul style="margin:0;padding-left:16px"><li>Step 1: Launch app — verify Login screen</li><li>Step 2: Login with valid credentials</li><li>Step 3: Tap Community Hall category</li><li>Step 4: Select 'City Community Hall' venue</li><li>Step 5: Tap Book Now — verify date picker opens</li><li>Step 6: Select check-in day 15, check-out day 17</li><li>Step 7: Set guest count to 2</li><li>Step 8: Scroll to Confirm Booking — verify summary</li><li>Step 9: Tap Confirm Booking</li><li>Verify Order Success screen displayed</li><li>Verify Order ID is present and non-empty</li></ul></td>
+          <td>Success screen shown with valid Order ID generated</td>
+          <td style="text-align:center;"><span style="background:#2ecc71;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;">PASSED</span></td>
+          <td style="text-align:center;">18.64s</td>
+          <td><details><summary style="cursor:pointer;color:#3498db;">View Logs</summary>
+              <pre style="background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;
+                          font-size:11px;overflow-x:auto;margin-top:6px;">INFO | === TC_SMOKE_006: FULL E2E Community Hall Booking Flow ===<br>INFO | Step 1: Waiting for splash screen...<br>INFO | Step 1 PASS: Login screen displayed<br>INFO | Step 2: Logging in...<br>INFO | Step 2 PASS: Dashboard loaded<br>INFO | Step 3: Tapping Community Hall category...<br>INFO | Step 3 PASS: Community Hall listing displayed<br>INFO | Step 4: Selecting venue 'City Community Hall'...<br>INFO | Step 4 PASS: Venue detail loaded for 'City Community Hall'<br>INFO | Step 5: Tapping 'Book Now' to open date picker...<br>INFO | Step 5 PASS: Date picker is visible<br>INFO | Step 6: Selecting check-in day=15, check-out day=17<br>INFO | Step 6 PASS: Dates set — Check-in: Apr 15 2026, Check-out: Apr 17 2026<br>INFO | Step 7: Setting guest count to 2<br>INFO | Step 7 PASS: Guest count set<br>INFO | Step 8: Confirming booking...<br>INFO | Booking summary total price: ₹12,500<br>INFO | Screenshot saved: reports/screenshots/before_confirmation_20260311_154832.png<br>INFO | Order success screen displayed: True<br>INFO | Order ID: BME-2026-009341<br>INFO | ============================================================<br>INFO | PASS | TC_SMOKE_006: Order Created Successfully!<br>INFO |   Order ID     : BME-2026-009341<br>INFO |   Venue        : City Community Hall<br>INFO |   Check-in     : Apr 15, 2026<br>INFO |   Check-out    : Apr 17, 2026<br>INFO |   Total Price  : ₹12,500<br>INFO |   Success Msg  : Booking Confirmed!<br>INFO | ============================================================</pre></details></td>
+        </tr></tbody>
+    </table>
+  </div>
+
+  <!-- Summary -->
+  <div class="card">
+    <h2>📝 Execution Summary</h2>
+    <table>
+      <tr><th>Category</th><th>Count</th><th>Tests</th></tr>
+      <tr><td>✅ Passed</td><td>6</td>
+          <td>TC_SMOKE_001, TC_SMOKE_002, TC_SMOKE_003, TC_SMOKE_004, TC_SMOKE_005, TC_SMOKE_006</td></tr>
+      <tr><td>❌ Failed</td><td>0</td>
+          <td>—</td></tr>
+      <tr><td>⏱ Total Duration</td><td colspan="2">47.22 seconds</td></tr>
+    </table>
+  </div>
+
+</div>
+<div class="footer">BookMyEvent Now · AI Delivery Orchestrator · KAN-1 · 2026-03-11 04:46:19</div>
+</body></html>
