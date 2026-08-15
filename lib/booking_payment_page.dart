@@ -7,9 +7,8 @@ import 'payment/razorpay_keys.dart';
 import 'services/booking_repository.dart';
 import 'utils/dialog_utils.dart';
 import 'utils/fee_utils.dart';
-
-const Color _backgroundCream = Color(0xFFFEFAF4);
-const Color _cardSurface = Colors.white;
+import 'app_colors.dart';
+import 'widgets/embossed_box.dart';
 
 class BookingPaymentPage extends StatefulWidget {
   /// Primary booking used for display (vendor, category, etc.).
@@ -81,26 +80,23 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
     final isMultiDate = bookings.length > 1;
     final timeRange = isMultiDate ? null : _formatTimeRange(primary);
     return Scaffold(
-      backgroundColor: _backgroundCream,
+      backgroundColor: AppColors.headerBackground,
       appBar: AppBar(
         title: const Text('Payment'),
-        backgroundColor: _cardSurface,
+        backgroundColor: AppColors.headerBackground,
         elevation: 0,
-        foregroundColor: Colors.black87,
+        foregroundColor: Colors.white,
+        titleTextStyle: AppColors.headerTitleStyle,
+        iconTheme: AppColors.headerIconTheme,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Card(
-              color: _cardSurface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
+            EmbossedBox(
+              padding: const EdgeInsets.all(20),
+              child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
@@ -171,7 +167,6 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                     ),
                   ],
                 ),
-              ),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -189,9 +184,6 @@ class _BookingPaymentPageState extends State<BookingPaymentPage> {
                   _processing ? 'Processing...' : 'Pay with Razorpay (Test)',
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: const StadiumBorder(),
                 ),

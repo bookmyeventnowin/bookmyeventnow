@@ -8,26 +8,30 @@ import 'models/vendor.dart';
 import 'services/booking_repository.dart';
 import 'services/vendor_repository.dart';
 import 'user_navigation.dart';
+import 'app_colors.dart';
+import 'widgets/embossed_box.dart';
 
-const _creamBackground = Color(0xFFFEFAF4);
+const _creamBackground = AppColors.background;
 const _vendorCardBackground = Colors.white;
-const _vendorPrimaryText = Color(0xFF111827);
+const _vendorPrimaryText = AppColors.textPrimary;
 const _vendorSecondaryText = Color(0xFF4B5563);
-const _vendorButtonColor = Colors.black;
+const _vendorButtonColor = AppColors.primary;
 const _vendorAvatarBackground = Color(0xFFE5E7EB);
 
 const _detailCardColor = Colors.white;
 const _detailChipColor = Color(0xFFF5F5F5);
-const _detailChipText = Color(0xFF111827);
-const _detailMutedText = Color(0xFF6B7280);
-const _detailDivider = Color(0xFFE5E7EB);
+const _detailChipText = AppColors.textPrimary;
+const _detailMutedText = AppColors.textSecondary;
+const _detailDivider = AppColors.border;
 
-const _bookingSheetBackground = Color(0xFFFEFAF4);
+const _bookingSheetBackground = AppColors.background;
 const _bookingChipColor = Colors.white;
-const _bookingChipSelected = Color(0xFFF1F5F9);
-const _bookingChipText = Color(0xFF111827);
-const _bookingMutedText = Color(0xFF6B7280);
-const _bookingBorderColor = Color(0xFFE5E7EB);
+const _bookingChipSelected = AppColors.primarySoft;
+const _bookingChipSelectedText = AppColors.primaryDark;
+const _bookingChipSelectedBorder = AppColors.primary;
+const _bookingChipText = AppColors.textPrimary;
+const _bookingMutedText = AppColors.textSecondary;
+const _bookingBorderColor = AppColors.border;
 
 class VendorListPage extends StatefulWidget {
   const VendorListPage({required this.category, super.key});
@@ -56,11 +60,13 @@ class _VendorListPageState extends State<VendorListPage> {
   Widget build(BuildContext context) {
     final heading = widget.category.name;
     return Scaffold(
-      backgroundColor: _creamBackground,
+      backgroundColor: AppColors.headerBackground,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.headerBackground,
         elevation: 0,
         foregroundColor: Colors.white,
+        titleTextStyle: AppColors.headerTitleStyle,
+        iconTheme: AppColors.headerIconTheme,
         title: Text('Vendors: $heading'),
       ),
       body: StreamBuilder<List<Vendor>>(
@@ -343,12 +349,16 @@ class _VendorHeader extends StatelessWidget {
         children: [
           const Text(
             'Our Providers',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             '($count) vendor${count == 1 ? '' : 's'} available',
-            style: const TextStyle(color: Colors.black54),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
           ),
         ],
       ),
@@ -369,15 +379,9 @@ class _VendorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return EmbossedBox(
       color: _vendorCardBackground,
-      surfaceTintColor: _vendorCardBackground,
-      elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
-      clipBehavior: Clip.antiAlias,
+      borderRadius: 24,
       child: InkWell(
         onTap: onViewDetails,
         child: Padding(
@@ -1049,20 +1053,23 @@ class _BookingSheetState extends State<_BookingSheet> {
                           label: Text(
                             _formatDate(date),
                             style: const TextStyle(
-                              color: _bookingChipText,
-                              fontWeight: FontWeight.w600,
+                              color: _bookingChipSelectedText,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                           selected: true,
                           backgroundColor: _bookingChipColor,
                           selectedColor: _bookingChipSelected,
-                          checkmarkColor: _bookingChipText,
-                          side: const BorderSide(color: _bookingBorderColor),
+                          checkmarkColor: _bookingChipSelectedText,
+                          side: const BorderSide(
+                            color: _bookingChipSelectedBorder,
+                            width: 1.4,
+                          ),
                           onSelected: (_) => _removeDate(date),
                           deleteIcon: const Icon(
                             Icons.close,
                             size: 16,
-                            color: _bookingMutedText,
+                            color: _bookingChipSelectedText,
                           ),
                           onDeleted: () => _removeDate(date),
                         ),
@@ -1420,16 +1427,16 @@ class _TimeField extends StatelessWidget {
         const SizedBox(height: 6),
         OutlinedButton.icon(
           onPressed: onTap,
-          icon: const Icon(Icons.access_time, color: _bookingChipText),
+          icon: const Icon(Icons.access_time, color: AppColors.primary),
           label: Text(
             value,
             style: const TextStyle(
               color: _vendorPrimaryText,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
           style: OutlinedButton.styleFrom(
-            backgroundColor: Colors.white.withValues(alpha: 0.9),
+            backgroundColor: Colors.white,
             foregroundColor: _bookingChipText,
             side: const BorderSide(color: _bookingBorderColor),
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
@@ -1460,15 +1467,19 @@ class _EmptyVendorState extends StatelessWidget {
           const SizedBox(height: 12),
           const Text(
             'Vendors on the way',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
           ),
           const SizedBox(height: 6),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(
               'We are curating partners for this category. Please check back soon!',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
             ),
           ),
         ],
@@ -1504,7 +1515,7 @@ class _ErrorState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
             ),
           ],
         ),
@@ -1555,10 +1566,12 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
   Widget build(BuildContext context) {
     final images = vendor.galleryImages;
     return Scaffold(
-      backgroundColor: _creamBackground,
+      backgroundColor: AppColors.headerBackground,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.headerBackground,
         foregroundColor: Colors.white,
+        titleTextStyle: AppColors.headerTitleStyle,
+        iconTheme: AppColors.headerIconTheme,
         elevation: 0,
         title: Text(vendor.name),
       ),
@@ -1608,9 +1621,9 @@ class _VendorDetailPageState extends State<VendorDetailPage> {
             return ElevatedButton.icon(
               onPressed: onPressed,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.black12,
+                disabledBackgroundColor: AppColors.border,
                 disabledForegroundColor: Colors.white70,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
@@ -2119,13 +2132,11 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return EmbossedBox(
       color: _detailCardColor,
-      surfaceTintColor: _detailCardColor,
-      elevation: 3,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: Padding(padding: const EdgeInsets.all(18), child: child),
+      borderRadius: 18,
+      padding: const EdgeInsets.all(18),
+      child: child,
     );
   }
 }

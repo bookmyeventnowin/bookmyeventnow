@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'user_role_storage.dart';
+import 'app_colors.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -65,10 +66,12 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.headerBackground,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.headerBackground,
         foregroundColor: Colors.white,
+        titleTextStyle: AppColors.headerTitleStyle,
+        iconTheme: AppColors.headerIconTheme,
         elevation: 0,
         title: const Text("Let's Go"),
       ),
@@ -110,7 +113,7 @@ class _LoginPageState extends State<LoginPage> {
                                 style: const TextStyle(color: Colors.white),
                               ),
                               value: role,
-                              activeColor: Colors.white,
+                              activeColor: AppColors.primary,
                               groupValue: _selectedRole,
                               onChanged: _loading
                                   ? null

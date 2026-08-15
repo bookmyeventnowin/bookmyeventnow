@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +19,8 @@ import 'vendor_edit_sheet.dart';
 import 'vendor_list_page.dart';
 import 'payment/razorpay_keys.dart';
 import 'user_navigation.dart';
+import 'app_colors.dart';
+import 'widgets/embossed_box.dart';
 import 'utils/dialog_utils.dart';
 import 'utils/fee_utils.dart';
 
@@ -34,7 +37,7 @@ class UserHomePage extends StatefulWidget {
 }
 
 class _UserHomePageState extends State<UserHomePage> {
-  static const Color _backgroundCream = Color(0xFFFEFAF4);
+  static const Color _backgroundCream = AppColors.background;
   static const Color _cardSurface = Colors.white;
   static const int _carouselLoopBase = 10000;
   final BookingRepository _bookingRepository = BookingRepository();
@@ -293,10 +296,12 @@ class _UserHomePageState extends State<UserHomePage> {
     final photoUrl = widget.user.photoURL;
 
     return Scaffold(
-      backgroundColor: _backgroundCream,
+      backgroundColor: AppColors.headerBackground,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.headerBackground,
         foregroundColor: Colors.white,
+        titleTextStyle: AppColors.headerTitleStyle,
+        iconTheme: AppColors.headerIconTheme,
         elevation: 0,
         titleSpacing: 16,
         title: Row(
@@ -396,21 +401,43 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildHomeTab(List<Category> categories, bool isLoading) {
     return Container(
-      color: _backgroundCream,
+      color: AppColors.headerBackground,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSearchHeader(),
-            const SizedBox(height: 24),
-            _buildCategoryGrid(categories, isLoading),
-            const SizedBox(height: 20),
-            _buildCategoryCarousel(categories, isLoading),
-            const SizedBox(height: 20),
-            _buildPromiseCard(),
-            const SizedBox(height: 32),
-            _buildUserFooter(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSearchHeader(),
+                  const SizedBox(height: 20),
+                  _buildCategoryGrid(categories, isLoading),
+                ],
+              ),
+            ),
+            Container(
+              decoration: const BoxDecoration(
+                color: _backgroundCream,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              child: _buildCategoryCarousel(categories, isLoading),
+            ),
+            Container(
+              width: double.infinity,
+              color: AppColors.headerBackground,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildPromiseCard(),
+                  const SizedBox(height: 32),
+                  _buildUserFooter(dark: true),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -419,7 +446,7 @@ class _UserHomePageState extends State<UserHomePage> {
 
   Widget _buildBookingsTab(List<Booking> bookings, bool isLoading) {
     return Container(
-      color: _backgroundCream,
+      color: AppColors.headerBackground,
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
@@ -427,7 +454,7 @@ class _UserHomePageState extends State<UserHomePage> {
           children: [
             _buildUserBookingsCard(bookings, isLoading),
             const SizedBox(height: 32),
-            _buildUserFooter(),
+            _buildUserFooter(dark: true),
           ],
         ),
       ),
@@ -492,28 +519,21 @@ class _UserHomePageState extends State<UserHomePage> {
     final photoUrl = user.photoURL;
 
     return Container(
-      color: _backgroundCream,
+      color: AppColors.headerBackground,
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Card(
-              color: _cardSurface,
-              elevation: 6,
-              shadowColor: Colors.black.withValues(alpha: 0.08),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 40,
+            EmbossedBox(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 40,
                           backgroundColor: Colors.black87,
                           backgroundImage: photoUrl != null
                               ? NetworkImage(photoUrl)
@@ -601,13 +621,12 @@ class _UserHomePageState extends State<UserHomePage> {
                   ],
                 ),
               ),
-            ),
             const SizedBox(height: 32),
             _buildAboutBmeCard(),
             const SizedBox(height: 24),
             _buildHelpSupportCard(),
             const SizedBox(height: 32),
-            _buildUserFooter(),
+            _buildUserFooter(dark: true),
           ],
         ),
       ),
@@ -626,12 +645,7 @@ class _UserHomePageState extends State<UserHomePage> {
       'Transparent pricing, trusted vendors, and instant confirmations.',
     ];
 
-    return Card(
-      color: _cardSurface,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
+    return EmbossedBox(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -672,17 +686,11 @@ class _UserHomePageState extends State<UserHomePage> {
             ),
           ],
         ),
-      ),
     );
   }
 
   Widget _buildHelpSupportCard() {
-    return Card(
-      color: _cardSurface,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
+    return EmbossedBox(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -700,59 +708,84 @@ class _UserHomePageState extends State<UserHomePage> {
             SelectableText(
               'Email: bookmyeventnow.in@gmail.com',
               style: TextStyle(
-                color: Colors.indigo,
+                color: AppColors.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
-      ),
     );
   }
 
   Widget _buildSearchHeader() {
-    return Card(
-      color: _cardSurface,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Find services for your next event',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() => _searchQuery = value.trim()),
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.clear),
-                        tooltip: 'Clear search',
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      ),
-                hintText: 'Search categories (e.g. Catering, Decoration)',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  borderSide: BorderSide.none,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.8),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) =>
+                    setState(() => _searchQuery = value.trim()),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: AppColors.primary,
+                  ),
+                  suffixIcon: _searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear),
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        ),
+                  hintText: 'Search categories, e.g. Catering',
+                  filled: false,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
-      ),
+        const SizedBox(height: 20),
+        const Text(
+          'Plan your next event',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Pick a service to get started',
+          style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.7)),
+        ),
+      ],
     );
   }
 
@@ -786,12 +819,7 @@ class _UserHomePageState extends State<UserHomePage> {
       }
     }
 
-    return Card(
-      color: _cardSurface,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
+    return EmbossedBox(
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: SizedBox(
           height: 200,
@@ -912,8 +940,8 @@ class _UserHomePageState extends State<UserHomePage> {
                               margin: const EdgeInsets.symmetric(horizontal: 4),
                               decoration: BoxDecoration(
                                 color: activeIndex == index
-                                    ? Colors.indigo
-                                    : Colors.indigo.shade100,
+                                    ? AppColors.primary
+                                    : AppColors.primarySoft,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
@@ -924,77 +952,167 @@ class _UserHomePageState extends State<UserHomePage> {
                   ],
                 ),
         ),
-      ),
     );
   }
 
   Widget _buildCategoryGrid(List<Category> categories, bool isLoading) {
-    return Card(
-      color: _cardSurface,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+    if (isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 32),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    if (categories.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Text('No categories found. Check back soon!'),
+      );
+    }
+
+    final hero = categories.first;
+    final rest = categories.length > 1 ? categories.sublist(1) : <Category>[];
+    final hasTrailingBanner = rest.length.isOdd;
+    final gridItems = hasTrailingBanner
+        ? rest.sublist(0, rest.length - 1)
+        : rest;
+    final trailing = hasTrailingBanner ? rest.last : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _bentoHeroTile(hero),
+        if (gridItems.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          GridView.count(
+            crossAxisCount: 2,
+            childAspectRatio: 1.3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            children: [for (final category in gridItems) _bentoTile(category)],
+          ),
+        ],
+        if (trailing != null) ...[
+          const SizedBox(height: 12),
+          _bentoBannerTile(trailing),
+        ],
+      ],
+    );
+  }
+
+  Widget _bentoHeroTile(Category category) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => _openCategory(category),
+      child: Container(
+        height: 130,
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Select a service',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            if (isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (categories.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Text('No categories found. Check back soon!'),
-              )
-            else
-              GridView.count(
-                crossAxisCount: MediaQuery.of(context).size.width > 600 ? 4 : 2,
-                childAspectRatio: 1.1,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                children: [
-                  for (final category in categories)
-                    InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () => _openCategory(category),
-                      child: Column(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: SizedBox(
-                              height: 110,
-                              width: 110,
-                              child: _buildCategoryIcon(category),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            category.name,
-                            maxLines: 2,
-                            textAlign: TextAlign.center,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
+            Icon(_bentoIconForCategory(category), color: Colors.white, size: 30),
+            Text(
+              category.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
               ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _bentoTile(Category category) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openCategory(category),
+      child: EmbossedBox(
+        borderRadius: 16,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(
+              _bentoIconForCategory(category),
+              color: AppColors.primary,
+              size: 26,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              category.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bentoBannerTile(Category category) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openCategory(category),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.primarySoft,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              category.name,
+              style: const TextStyle(
+                color: AppColors.primaryDark,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+            Icon(
+              _bentoIconForCategory(category),
+              color: AppColors.primaryDark,
+              size: 24,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _bentoIconForCategory(Category category) {
+    final key = category.name.toLowerCase();
+    if (key.contains('cater')) return Icons.restaurant;
+    if (key.contains('decor')) return Icons.celebration;
+    if (key.contains('hall')) return Icons.apartment;
+    if (key.contains('human') || key.contains('resource')) {
+      return Icons.groups;
+    }
+    return Icons.category_outlined;
   }
 
   Widget _buildCategoryIcon(Category category) {
@@ -1017,12 +1135,7 @@ class _UserHomePageState extends State<UserHomePage> {
   }
 
   Widget _buildPromiseCard() {
-    return Card(
-      color: _cardSurface,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
+    return EmbossedBox(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Row(
           children: [
@@ -1063,12 +1176,11 @@ class _UserHomePageState extends State<UserHomePage> {
                 ],
               ),
               child: const Center(
-                child: Icon(Icons.verified, size: 42, color: Colors.deepPurple),
+                child: Icon(Icons.verified, size: 42, color: AppColors.primary),
               ),
             ),
           ],
         ),
-      ),
     );
   }
 
@@ -1081,12 +1193,7 @@ class _UserHomePageState extends State<UserHomePage> {
       groupedByOrder.putIfAbsent(key, () => <Booking>[]).add(booking);
     }
 
-    return Card(
-      color: _cardSurface,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
+    return EmbossedBox(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1327,16 +1434,18 @@ class _UserHomePageState extends State<UserHomePage> {
               ),
           ],
         ),
-      ),
     );
   }
 
-  Widget _buildUserFooter() {
+  Widget _buildUserFooter({bool dark = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: const [
-        Divider(color: Color(0xFFE2DBFF), thickness: 1),
-        SizedBox(height: 16),
+      children: [
+        Divider(
+          color: dark ? Colors.white.withValues(alpha: 0.15) : const Color(0xFFE2DBFF),
+          thickness: 1,
+        ),
+        const SizedBox(height: 16),
         Center(
           child: Text(
             'Book MY Event Now',
@@ -1344,7 +1453,7 @@ class _UserHomePageState extends State<UserHomePage> {
               fontSize: 16,
               fontWeight: FontWeight.w600,
               letterSpacing: 1.1,
-              color: Color(0xFFB6AED6),
+              color: dark ? const Color(0xFFC9BFEF) : const Color(0xFFB6AED6),
             ),
           ),
         ),
@@ -1717,7 +1826,7 @@ class _UserHomePageState extends State<UserHomePage> {
   Color _bookingStatusColor(BookingStatus status) {
     return switch (status) {
       BookingStatus.pending => Colors.orange,
-      BookingStatus.accepted => Colors.indigo,
+      BookingStatus.accepted => AppColors.primary,
       BookingStatus.declined => Colors.redAccent,
       BookingStatus.paid => Colors.green,
     };
@@ -1889,7 +1998,7 @@ class PromiseBullet extends StatelessWidget {
         const Text(
           '- ',
           style: TextStyle(
-            color: Colors.deepPurple,
+            color: AppColors.primary,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1959,11 +2068,13 @@ class _VendorHomePageState extends State<VendorHomePage> {
                 _maybeShowVendorBookingAlert(bookings);
 
                 return Scaffold(
-                  backgroundColor: const Color(0xFFF6F7FB),
+                  backgroundColor: AppColors.headerBackground,
                   appBar: AppBar(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black87,
-                    elevation: 0.3,
+                    backgroundColor: AppColors.headerBackground,
+                    foregroundColor: Colors.white,
+                    titleTextStyle: AppColors.headerTitleStyle,
+                    iconTheme: AppColors.headerIconTheme,
+                    elevation: 0,
                     title: const Text('Vendor Home'),
                     actions: [
                       if (pendingBookings > 0)
@@ -2011,27 +2122,10 @@ class _VendorHomePageState extends State<VendorHomePage> {
                       : null,
                   bottomNavigationBar: vendor == null
                       ? null
-                      : BottomNavigationBar(
-                          type: BottomNavigationBarType.fixed,
+                      : VendorBottomNav(
                           currentIndex: _tabIndex,
-                          onTap: (index) => setState(() => _tabIndex = index),
-                          items: const [
-                            BottomNavigationBarItem(
-                              icon: Icon(Icons.storefront_outlined),
-                              activeIcon: Icon(Icons.storefront),
-                              label: 'Home',
-                            ),
-                            BottomNavigationBarItem(
-                              icon: Icon(Icons.event_note_outlined),
-                              activeIcon: Icon(Icons.event_note),
-                              label: 'Bookings',
-                            ),
-                            BottomNavigationBarItem(
-                              icon: Icon(Icons.workspace_premium_outlined),
-                              activeIcon: Icon(Icons.workspace_premium),
-                              label: 'Subscription',
-                            ),
-                          ],
+                          onNavigate: (index) =>
+                              setState(() => _tabIndex = index),
                         ),
                   body: vendor == null
                       ? _buildEmptyVendorState(categories.isEmpty)
@@ -2209,13 +2303,17 @@ class _VendorHomePageState extends State<VendorHomePage> {
           children: [
             Icon(
               Icons.storefront_outlined,
-              color: Colors.indigo.shade300,
+              color: AppColors.primary,
               size: 52,
             ),
             const SizedBox(height: 16),
             const Text(
               'Set up your vendor presence',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -2223,7 +2321,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
                   ? 'Categories are still loading. Please try again in a moment.'
                   : 'Tap the "Create vendor" button to add your business details and start receiving bookings.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
             ),
           ],
         ),
@@ -2312,83 +2410,74 @@ class _VendorHomePageState extends State<VendorHomePage> {
         ),
         if (!subscriptionActive) ...[
           const SizedBox(height: 16),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+          EmbossedBox(
             color: Colors.orange.shade50,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Subscription expired',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    expiry == null
-                        ? 'Activate your annual plan to publish your service to users.'
-                        : 'Your plan expired on ${_formatBookingDate(expiry)}. Renew to make your listing visible to users.',
-                    style: const TextStyle(color: Colors.black87),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => setState(() => _tabIndex = 2),
-                    icon: const Icon(Icons.workspace_premium_outlined),
-                    label: const Text('Manage subscription'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: 24),
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
+            borderRadius: 16,
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Quick glance',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  'Subscription expired',
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildVendorStatChip(
-                      icon: Icons.hourglass_top_outlined,
-                      label: 'Pending',
-                      value: pendingBookings.toString(),
-                    ),
-                    _buildVendorStatChip(
-                      icon: Icons.event_available_outlined,
-                      label: 'Upcoming',
-                      value: upcoming.toString(),
-                    ),
-                    _buildVendorStatChip(
-                      icon: averageRating == null
-                          ? Icons.star_border
-                          : Icons.star,
-                      label: 'Rating',
-                      value: ratingLabel,
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                Text(
+                  expiry == null
+                      ? 'Activate your annual plan to publish your service to users.'
+                      : 'Your plan expired on ${_formatBookingDate(expiry)}. Renew to make your listing visible to users.',
+                  style: const TextStyle(color: Colors.black87),
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Review and respond to booking requests from the Bookings tab.',
-                  style: TextStyle(color: Colors.black54),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _tabIndex = 2),
+                  icon: const Icon(Icons.workspace_premium_outlined),
+                  label: const Text('Manage subscription'),
                 ),
               ],
             ),
+          ),
+        ],
+        const SizedBox(height: 24),
+        EmbossedBox(
+          borderRadius: 18,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Quick glance',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildVendorStatChip(
+                    icon: Icons.hourglass_top_outlined,
+                    label: 'Pending',
+                    value: pendingBookings.toString(),
+                  ),
+                  _buildVendorStatChip(
+                    icon: Icons.event_available_outlined,
+                    label: 'Upcoming',
+                    value: upcoming.toString(),
+                  ),
+                  _buildVendorStatChip(
+                    icon: averageRating == null
+                        ? Icons.star_border
+                        : Icons.star,
+                    label: 'Rating',
+                    value: ratingLabel,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Review and respond to booking requests from the Bookings tab.',
+                style: TextStyle(color: Colors.black54),
+              ),
+            ],
           ),
         ),
       ],
@@ -2422,7 +2511,11 @@ class _VendorHomePageState extends State<VendorHomePage> {
           children: [
             Text(
               title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 12),
             Container(
@@ -2447,7 +2540,11 @@ class _VendorHomePageState extends State<VendorHomePage> {
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
           ),
           const SizedBox(height: 12),
           ...items.map((booking) {
@@ -2773,18 +2870,14 @@ class _VendorHomePageState extends State<VendorHomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
+          EmbossedBox(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
                         radius: 26,
                         backgroundColor: isActive
                             ? Colors.green.withAlpha(40)
@@ -2842,7 +2935,6 @@ class _VendorHomePageState extends State<VendorHomePage> {
                   _subscriptionRow('Status', isActive ? 'Active' : 'Inactive'),
                 ],
               ),
-            ),
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -2864,7 +2956,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
                     : 'Activate for ${_formatCurrency(_annualSubscriptionFee)}',
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
@@ -2874,9 +2966,9 @@ class _VendorHomePageState extends State<VendorHomePage> {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Your subscription keeps your service visible to users. Once a plan expires and is not renewed, your listing is hidden until you reactivate it.',
-            style: TextStyle(color: Colors.black54),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
           ),
         ],
       ),
@@ -2893,13 +2985,8 @@ class _VendorHomePageState extends State<VendorHomePage> {
     final statusColor = canEdit ? Colors.green : Colors.redAccent;
     final statusLabel = canEdit ? 'Active' : 'Inactive';
 
-    return Container(
+    return EmbossedBox(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE0E3F1)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3083,11 +3170,11 @@ class _VendorHomePageState extends State<VendorHomePage> {
       height: 56,
       width: 56,
       decoration: BoxDecoration(
-        color: Colors.indigo.shade100,
+        color: AppColors.primarySoft,
         borderRadius: BorderRadius.circular(28),
       ),
       alignment: Alignment.center,
-      child: const Icon(Icons.storefront, color: Colors.indigo),
+      child: const Icon(Icons.storefront, color: AppColors.primary),
     );
   }
 
@@ -3106,8 +3193,8 @@ class _VendorHomePageState extends State<VendorHomePage> {
       children: [
         CircleAvatar(
           radius: 22,
-          backgroundColor: Colors.indigo.withValues(alpha: 0.1),
-          child: Icon(icon, color: Colors.indigo),
+          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+          child: Icon(icon, color: AppColors.primary),
         ),
         const SizedBox(height: 8),
         Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -3383,7 +3470,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
   Color _bookingStatusColor(BookingStatus status) {
     return switch (status) {
       BookingStatus.pending => Colors.orange,
-      BookingStatus.accepted => Colors.indigo,
+      BookingStatus.accepted => AppColors.primary,
       BookingStatus.declined => Colors.redAccent,
       BookingStatus.paid => Colors.green,
     };
@@ -3720,7 +3807,7 @@ class _VendorMetric extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: Colors.indigo.withValues(alpha: 0.05),
+        color: AppColors.primary.withValues(alpha: 0.05),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

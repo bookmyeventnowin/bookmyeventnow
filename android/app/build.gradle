@@ -14,8 +14,8 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace "com.bookmyeventnow.app"
-    compileSdkVersion 35
-    ndkVersion "26.3.11579264"
+    compileSdkVersion 36
+    ndkVersion "27.0.12077973"
 
     flavorDimensions "env"
 
@@ -33,7 +33,7 @@ android {
     defaultConfig {
         applicationId "com.bookmyeventnow.app"
         minSdkVersion 23
-        targetSdkVersion 35
+        targetSdkVersion 36
         // Bump these when uploading a new version to Play Console.
         // Version code must be a unique integer per release.
         versionCode 11

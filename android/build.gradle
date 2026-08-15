@@ -1,5 +1,5 @@
 // Top-level build.gradle (Groovy) for Flutter projects
-// Compatible with AGP 8.1.1, Kotlin 1.9.22 and Gradle 8.4
+// Compatible with AGP 8.9.1, Kotlin 1.9.22 and Gradle 8.12 (required for compileSdk/targetSdk 36)
 
 buildscript {
     repositories {
@@ -8,7 +8,7 @@ buildscript {
     }
     dependencies {
         // Android Gradle Plugin
-        classpath 'com.android.tools.build:gradle:8.1.1'
+        classpath 'com.android.tools.build:gradle:8.9.1'
         // Kotlin plugin (used by some plugins)
         classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
         // Google services (only applied in module/app if needed)

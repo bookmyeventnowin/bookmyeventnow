@@ -7,6 +7,7 @@ import 'package:mime/mime.dart';
 
 import 'models/category.dart';
 import 'models/vendor.dart';
+import 'widgets/embossed_box.dart';
 
 class _DecorationPackageEntry {
   _DecorationPackageEntry({required this.imageUrl, double price = 0})
@@ -593,21 +594,10 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
   }
 
   Widget _buildMenuItemCard(_MenuItemEntry entry, int index) {
-    return Container(
+    return EmbossedBox(
       margin: const EdgeInsets.only(bottom: 12),
+      borderRadius: 16,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -718,14 +708,11 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
   }
 
   Widget _buildProofUploadCard() {
-    return Container(
+    return EmbossedBox(
       width: double.infinity,
+      color: Colors.grey.shade50,
+      borderRadius: 16,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -735,14 +722,10 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
           ),
           const SizedBox(height: 8),
           if (_proofUrl.isNotEmpty)
-            Container(
+            EmbossedBox(
               margin: const EdgeInsets.only(bottom: 12),
+              borderRadius: 12,
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-              ),
               child: Row(
                 children: [
                   const Icon(Icons.verified, color: Colors.green),
@@ -792,21 +775,10 @@ class _VendorEditSheetState extends State<VendorEditSheet> {
   }
 
   Widget _buildDecorationPackageCard(_DecorationPackageEntry entry, int index) {
-    return Container(
+    return EmbossedBox(
       margin: const EdgeInsets.only(bottom: 12),
+      borderRadius: 16,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
       child: Row(
         children: [
           GestureDetector(
